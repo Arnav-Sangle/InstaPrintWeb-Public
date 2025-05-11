@@ -46,7 +46,7 @@ const Navbar: React.FC = () => {
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <span className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
-              PrintFling
+              InstaPrint
             </span>
           </Link>
           
@@ -55,12 +55,13 @@ const Navbar: React.FC = () => {
             <Link to="/" className="font-medium transition-colors hover:text-primary">
               Home
             </Link>
-            <Link to="/how-it-works" className="font-medium transition-colors hover:text-primary">
+
+            {/* <Link to="/how-it-works" className="font-medium transition-colors hover:text-primary">
               How it Works
-            </Link>
-            <Link to="/shops" className="font-medium transition-colors hover:text-primary">
+            </Link> */}
+            {/* <Link to="/shops" className="font-medium transition-colors hover:text-primary">
               Print Shops
-            </Link>
+            </Link> */}
             
             {user ? (
               <div className="flex items-center gap-4">
@@ -110,20 +111,21 @@ const Navbar: React.FC = () => {
             >
               Home
             </Link>
-            <Link 
+            
+            {/* <Link 
               to="/how-it-works" 
               className="font-medium py-2 transition-colors hover:text-primary"
               onClick={() => setMobileMenuOpen(false)}
             >
               How it Works
-            </Link>
-            <Link 
+            </Link> */}
+            {/* <Link 
               to="/shops" 
               className="font-medium py-2 transition-colors hover:text-primary"
               onClick={() => setMobileMenuOpen(false)}
             >
               Print Shops
-            </Link>
+            </Link> */}
             
             {user ? (
               <>

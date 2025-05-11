@@ -21,12 +21,6 @@ export type PrintSpecs = {
   pricePerPage: number | null;
 };
 
-type PricingOption = {
-  paperSize: string;
-  colorMode: string;
-  price_per_page: number;
-};
-
 const PrintSpecifications = ({ 
   shopId, 
   onSpecsChange 
@@ -43,7 +37,11 @@ const PrintSpecifications = ({
     pricePerPage: null
   });
   
-  const [pricingOptions, setPricingOptions] = useState<PricingOption[]>([]);
+  const [pricingOptions, setPricingOptions] = useState<{
+    paperSize: string;
+    colorMode: string;
+    price_per_page: number;
+  }[]>([]);
   
   const [loading, setLoading] = useState(false);
 
@@ -71,19 +69,12 @@ const PrintSpecifications = ({
         
       if (error) throw error;
       
-      // Transform the data to match our expected format
-      const formattedData = data?.map(item => ({
-        paperSize: item.paper_size,
-        colorMode: item.color_mode,
-        price_per_page: item.price_per_page
-      })) || [];
-      
-      setPricingOptions(formattedData);
+      setPricingOptions(data || []);
       
       // Set default pricing if available
-      if (formattedData.length > 0) {
-        const matchingPricing = formattedData.find(
-          p => p.paperSize === specs.paperSize && p.colorMode === specs.colorMode
+      if (data && data.length > 0) {
+        const matchingPricing = data.find(
+          p => p.paper_size === specs.paperSize && p.color_mode === specs.colorMode
         );
         
         if (matchingPricing) {
@@ -103,7 +94,7 @@ const PrintSpecifications = ({
 
   const updatePricePerPage = () => {
     const matchingPricing = pricingOptions.find(
-      p => p.paperSize === specs.paperSize && p.colorMode === specs.colorMode
+      p => p.paper_size === specs.paperSize && p.color_mode === specs.colorMode
     );
     
     setSpecs(prev => ({
@@ -117,7 +108,7 @@ const PrintSpecifications = ({
       ...prev,
       paperSize: value as PaperSize
     }));
-    setTimeout(updatePricePerPage, 0);
+    updatePricePerPage();
   };
 
   const handleColorModeChange = (value: string) => {
@@ -125,7 +116,7 @@ const PrintSpecifications = ({
       ...prev,
       colorMode: value as ColorMode
     }));
-    setTimeout(updatePricePerPage, 0);
+    updatePricePerPage();
   };
 
   const handleCopiesChange = (e: React.ChangeEvent<HTMLInputElement>) => {

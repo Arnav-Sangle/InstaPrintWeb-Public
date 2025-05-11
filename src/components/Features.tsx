@@ -30,7 +30,7 @@ const Features: React.FC = () => {
     <div className="py-24 bg-muted/30">
       <div className="container px-4 mx-auto">
         <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold mb-4">How PrintFling Works</h2>
+          <h2 className="text-3xl font-bold mb-4">How InstaPrint Works</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
             Print documents without the hassle. Our platform connects you with local print shops in just a few clicks.
           </p>

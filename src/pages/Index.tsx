@@ -21,7 +21,7 @@ const Index = () => {
           <div className="container px-4 mx-auto text-center">
             <h2 className="text-3xl font-bold mb-6">Ready to get started?</h2>
             <p className="max-w-2xl mx-auto mb-8 text-primary-foreground/90">
-              Join PrintFling today and start printing documents at local shops with ease.
+              Join InstaPrint today and start printing documents at local shops with ease.
             </p>
             <Link to="/auth">
               <Button 
@@ -40,9 +40,9 @@ const Index = () => {
         <section className="py-24">
           <div className="container px-4 mx-auto">
             <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold mb-4">PrintFling for Everyone</h2>
+              <h2 className="text-3xl font-bold mb-4">InstaPrint for Everyone</h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                Whether you need to print documents or own a print shop, PrintFling has solutions for you.
+                Whether you need to print documents or own a print shop, InstaPrint has solutions for you.
               </p>
             </div>
             
@@ -116,7 +116,7 @@ const Index = () => {
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="mb-6 md:mb-0">
                 <span className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
-                  PrintFling
+                  InstaPrint
                 </span>
                 <p className="text-sm text-muted-foreground mt-2">
                   Connecting users with local print shops
@@ -127,12 +127,12 @@ const Index = () => {
                 <Link to="/" className="text-sm hover:text-primary transition-colors">
                   Home
                 </Link>
-                <Link to="/how-it-works" className="text-sm hover:text-primary transition-colors">
+                {/* <Link to="/how-it-works" className="text-sm hover:text-primary transition-colors">
                   How it Works
                 </Link>
                 <Link to="/shops" className="text-sm hover:text-primary transition-colors">
                   Print Shops
-                </Link>
+                </Link> */}
                 <Link to="/auth" className="text-sm hover:text-primary transition-colors">
                   Sign In
                 </Link>
@@ -140,7 +140,7 @@ const Index = () => {
             </div>
             
             <div className="mt-8 pt-8 border-t text-center text-sm text-muted-foreground">
-              <p>© {new Date().getFullYear()} PrintFling. All rights reserved.</p>
+              <p>© {new Date().getFullYear()} InstaPrint. All rights reserved.</p>
             </div>
           </div>
         </footer>

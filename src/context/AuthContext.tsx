@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -61,16 +60,128 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Set up auth state listener
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setLoading(true);
+  // Logout function
+  const logout = async () => {
+    try {
+      // Clear Supabase session both locally and on server
+      await supabase.auth.signOut({ scope: 'global' });
       
+      // Clear local storage and session storage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Clear any cookies
+      document.cookie.split(";").forEach((cookie) => {
+        document.cookie = cookie
+          .replace(/^ +/, "")
+          .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+      });
+      
+      // Clear user state
+      setUser(null);
+      setLoading(false);
+      
+      // Force reload to ensure clean state
+      window.location.href = '/';
+    } catch (error: any) {
+      console.error('Logout failed:', error);
+      // Even if there's an error, try to clear everything
+      localStorage.clear();
+      sessionStorage.clear();
+      setUser(null);
+      window.location.href = '/';
+    }
+  };
+
+  // Handle tab close and navigation events
+  useEffect(() => {
+    let isUnloading = false;
+    let isNavigatingBack = false;
+
+    // Handle tab/browser close
+    const handleTabClose = (event: BeforeUnloadEvent) => {
+      isUnloading = true;
+      // Only logout on actual tab/window close
+      supabase.auth.signOut({ scope: 'local' });
+      localStorage.clear();
+      sessionStorage.clear();
+      setUser(null);
+    };
+
+    // Handle navigation (back/forward)
+    const handleNavigation = (event: PopStateEvent) => {
+      if (!isUnloading && !isNavigatingBack) {
+        isNavigatingBack = true;
+        // Let the default back navigation happen naturally
+        // without programmatically calling history.go()
+        
+        // Reset the flag after navigation completes
+        setTimeout(() => {
+          isNavigatingBack = false;
+        }, 100);
+      }
+    };
+
+    // Handle visibility change (tab switch/close)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // Do nothing on tab switch, only handle actual close
+        const isClosing = document.visibilityState === 'hidden' && !document.hidden;
+        if (isClosing) {
+          handleTabClose(new Event('beforeunload') as BeforeUnloadEvent);
+        }
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener('beforeunload', handleTabClose);
+    window.addEventListener('popstate', handleNavigation);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup listeners on unmount
+    return () => {
+      window.removeEventListener('beforeunload', handleTabClose);
+      window.removeEventListener('popstate', handleNavigation);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // Initialize auth state
+  useEffect(() => {
+    // Check for existing session
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+          const profile = await fetchUserProfile(session.user.id);
+          if (profile) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              name: profile.name || '',
+              role: profile.role as UserRole,
+            });
+          } else {
+            // If profile fetch fails, clear the session
+            await logout();
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        // Clear session on error
+        await logout();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         const profile = await fetchUserProfile(session.user.id);
-        
         if (profile) {
           setUser({
             id: session.user.id,
@@ -82,36 +193,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
       }
-      
-      setLoading(false);
     });
 
-    // Check for existing session on mount
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-          const profile = await fetchUserProfile(session.user.id);
-          
-          if (profile) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email!,
-              name: profile.name || '',
-              role: profile.role as UserRole,
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error checking session:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    checkSession();
-    
+    // Cleanup subscription on unmount
     return () => {
       subscription.unsubscribe();
     };
@@ -165,18 +249,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw error;
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Logout function
-  const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-    } catch (error: any) {
-      console.error('Logout failed:', error);
-      toast.error(error.message || 'Failed to sign out');
-      throw error;
     }
   };
 

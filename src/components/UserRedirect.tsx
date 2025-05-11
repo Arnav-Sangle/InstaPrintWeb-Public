@@ -3,11 +3,11 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/context/AuthContext';
 
-interface UserRedirectProps {
+type UserRedirectProps = {
   children: React.ReactNode;
-  requiredRole?: UserRole | null;
+  requiredRole: UserRole | null;
   redirectTo?: string;
-}
+};
 
 const UserRedirect: React.FC<UserRedirectProps> = ({ 
   children, 
@@ -20,15 +20,21 @@ const UserRedirect: React.FC<UserRedirectProps> = ({
   useEffect(() => {
     if (loading) return;
     
-    // Redirect to auth if no user and auth is required
-    if (!user && requiredRole !== null) {
+    // If we're on the auth page (requiredRole is null) and user is logged in,
+    // redirect to their appropriate dashboard
+    if (requiredRole === null && user) {
+      redirectBasedOnRole(user.role);
+      return;
+    }
+    
+    // If a role is required and no user is logged in, redirect to auth
+    if (requiredRole !== null && !user) {
       navigate(redirectTo);
       return;
     }
     
-    // Redirect if user doesn't have required role
+    // If user doesn't have required role, redirect to their appropriate dashboard
     if (user && requiredRole !== null && user.role !== requiredRole) {
-      // Redirect to appropriate dashboard
       redirectBasedOnRole(user.role);
     }
   }, [user, loading, requiredRole, redirectTo, navigate]);

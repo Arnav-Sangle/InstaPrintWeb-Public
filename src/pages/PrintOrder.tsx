@@ -7,10 +7,17 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import DocumentUpload, { UploadedFile } from '@/components/DocumentUpload';
+import DocumentUpload from '@/components/DocumentUpload';
 import ShopSelector from '@/components/ShopSelector';
 import PrintSpecifications, { PrintSpecs } from '@/components/PrintSpecifications';
 import PaymentCalculator from '@/components/PaymentCalculator';
+
+type UploadedFile = {
+  name: string;
+  size: number;
+  type: string;
+  path: string;
+};
 
 type Shop = {
   id: string;

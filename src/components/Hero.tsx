@@ -25,7 +25,7 @@ const Hero: React.FC = () => {
           </h1>
           
           <p className="text-lg text-muted-foreground mb-10 max-w-2xl">
-            PrintFling connects you with local print shops. Upload your documents, 
+            InstaPrint connects you with local print shops. Upload your documents, 
             choose a shop, and pick up your prints when they're ready.
           </p>
           
@@ -36,11 +36,11 @@ const Hero: React.FC = () => {
                 <ArrowRight size={16} />
               </Button>
             </Link>
-            <Link to="/shops">
+            {/* <Link to="/shops">
               <Button size="lg" variant="outline">
                 Browse Print Shops
               </Button>
-            </Link>
+            </Link> */}
           </div>
         </div>
       </div>
