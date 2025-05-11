@@ -179,19 +179,27 @@ const ShopSelector = ({ onShopSelected }: { onShopSelected: (shop: Shop) => void
                 {userLocation ? 'Change Your Location' : 'Set Your Location'}
               </Button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="h-[80vh] sm:h-[90vh] overflow-y-auto">
-              <SheetHeader className="mb-4 sticky top-0 z-10">
-                <SheetTitle>Select Your Location</SheetTitle>
-                <SheetDescription>
-                  We'll use this to find the closest print shops to you
-                </SheetDescription>
-              </SheetHeader>
-              <GoogleMapPicker 
-                initialLocation={userLocation || undefined} 
-                onSelectLocation={handleLocationSelect} 
-              />
-              <div className="flex justify-end mt-4">
-                <Button onClick={handleLocationConfirm}>
+            <SheetContent side="bottom" className="h-[80vh] sm:h-[90vh] p-0 flex flex-col">
+              <div className="flex-none">
+                <SheetHeader className="p-6 pb-4 border-b">
+                  <SheetTitle>Select Your Location</SheetTitle>
+                  <SheetDescription>
+                    We'll use this to find the closest print shops to you
+                  </SheetDescription>
+                </SheetHeader>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-6">
+                  <GoogleMapPicker 
+                    initialLocation={userLocation || undefined} 
+                    onSelectLocation={handleLocationSelect} 
+                  />
+                </div>
+              </div>
+              
+              <div className="flex-none p-6 pt-4 border-t">
+                <Button onClick={handleLocationConfirm} className="w-full">
                   Confirm Location
                 </Button>
               </div>

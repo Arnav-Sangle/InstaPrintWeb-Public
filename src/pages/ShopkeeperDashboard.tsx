@@ -182,13 +182,13 @@ const ShopkeeperDashboard = () => {
                 </p>
               </div>
               
-              <Button 
+              {/* <Button 
                 className="flex items-center gap-2 shadow-sm animate-on-load"
                 onClick={() => setShowNewShopForm(true)}
               >
                 <Plus size={16} />
                 Register New Shop
-              </Button>
+              </Button> */}
             </div>
             
             {/* Dashboard stats */}
