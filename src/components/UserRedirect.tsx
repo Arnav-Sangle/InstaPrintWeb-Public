@@ -1,14 +1,13 @@
 
-import React, { useEffect, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/context/AuthContext';
-// import { supabase } from '@/integrations/supabase/client';
 
-type UserRedirectProps = {
+interface UserRedirectProps {
   children: React.ReactNode;
-  requiredRole: UserRole | null;
+  requiredRole?: UserRole | null;
   redirectTo?: string;
-};
+}
 
 const UserRedirect: React.FC<UserRedirectProps> = ({ 
   children, 
@@ -17,9 +16,24 @@ const UserRedirect: React.FC<UserRedirectProps> = ({
 }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const redirectBasedOnRole = useCallback((role: UserRole) => {
+  useEffect(() => {
+    if (loading) return;
+    
+    // Redirect to auth if no user and auth is required
+    if (!user && requiredRole !== null) {
+      navigate(redirectTo);
+      return;
+    }
+    
+    // Redirect if user doesn't have required role
+    if (user && requiredRole !== null && user.role !== requiredRole) {
+      // Redirect to appropriate dashboard
+      redirectBasedOnRole(user.role);
+    }
+  }, [user, loading, requiredRole, redirectTo, navigate]);
+
+  const redirectBasedOnRole = (role: UserRole) => {
     switch (role) {
       case 'customer':
         navigate('/customer-dashboard');
@@ -33,42 +47,7 @@ const UserRedirect: React.FC<UserRedirectProps> = ({
       default:
         navigate('/');
     }
-  }, [navigate]);
-
-  // Handle auth state and redirects
-  useEffect(() => {
-    let mounted = true;
-
-    const handleRedirects = () => {
-      if (loading) return;
-
-      if (mounted) {
-        // If we're on the auth page (requiredRole is null) and user is logged in,
-        // redirect to their appropriate dashboard
-        if (requiredRole === null && user) {
-          redirectBasedOnRole(user.role);
-          return;
-        }
-        
-        // If a role is required and no user is logged in, redirect to auth
-        if (requiredRole !== null && !user) {
-          navigate(redirectTo);
-          return;
-        }
-        
-        // If user doesn't have required role, redirect to their appropriate dashboard
-        if (user && requiredRole !== null && user.role !== requiredRole) {
-          redirectBasedOnRole(user.role);
-        }
-      }
-    };
-
-    handleRedirects();
-
-    return () => {
-      mounted = false;
-    };
-  }, [user, loading, requiredRole, redirectTo, navigate, redirectBasedOnRole]);
+  };
 
   // Show loading or render children
   if (loading) {

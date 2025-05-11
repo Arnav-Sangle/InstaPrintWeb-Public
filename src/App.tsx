@@ -13,33 +13,29 @@ import AdminDashboard from "./pages/AdminDashboard";
 import PrintOrder from "./pages/PrintOrder";
 import NotFound from "./pages/NotFound";
 
-// Create a new QueryClient instance inside the component
 const queryClient = new QueryClient();
 
-const App = () => {
-  
-  return (
-    <BrowserRouter>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/customer-dashboard" element={<CustomerDashboard />} />
-              <Route path="/shopkeeper-dashboard" element={<ShopkeeperDashboard />} />
-              <Route path="/admin-dashboard" element={<AdminDashboard />} />
-              <Route path="/print-order" element={<PrintOrder />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-    </BrowserRouter>
-  );
-};
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/customer-dashboard" element={<CustomerDashboard />} />
+            <Route path="/shopkeeper-dashboard" element={<ShopkeeperDashboard />} />
+            <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/print-order" element={<PrintOrder />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
 
 export default App;
