@@ -251,8 +251,8 @@ const PricingManager: React.FC<PricingManagerProps> = ({ shopId }) => {
                       <Input
                         type="number"
                         min="0"
-                        step="0.01"
-                        value={item.price_per_page}
+                        step="1"
+                        value={item.price_per_page.toString()}
                         onChange={(e) => handlePricingChange(index, 'price_per_page', e.target.value)}
                         className="h-6 sm:h-8 text-[0.625rem] sm:text-sm min-w-[50px] sm:min-w-[70px]"
                       />

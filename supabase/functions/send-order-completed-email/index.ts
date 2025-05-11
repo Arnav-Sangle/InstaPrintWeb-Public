@@ -35,7 +35,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("VITE_SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("VITE_SUPABASE_SERVICE_ROLE_KEY");
     
-    
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required");
     }
