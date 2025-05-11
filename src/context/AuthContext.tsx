@@ -63,14 +63,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout function
   const logout = async () => {
     try {
-      // Clear Supabase session both locally and on server
+      // Clean up any ongoing print order process
+      const printOrderState = localStorage.getItem('print-order-state');
+      if (printOrderState) {
+        const { path } = JSON.parse(printOrderState);
+        if (path) {
+          await supabase.storage
+            .from('print-documents')
+            .remove([path]);
+        }
+      }
+
+      // Clear Supabase session
       await supabase.auth.signOut({ scope: 'global' });
       
       // Clear local storage and session storage
       localStorage.clear();
       sessionStorage.clear();
       
-      // Clear any cookies
+      // Clear cookies
       document.cookie.split(";").forEach((cookie) => {
         document.cookie = cookie
           .replace(/^ +/, "")

@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export type PaperSize = 'A4' | 'A3' | 'Letter' | 'Legal';
-export type ColorMode = 'color' | 'blackAndWhite';
+export type ColorMode = 'color' | 'bw'; // Updated to use 'bw' instead of 'blackAndWhite'
 
 export type PrintSpecs = {
   paperSize: PaperSize;
@@ -19,36 +19,59 @@ export type PrintSpecs = {
   doubleSided: boolean;
   stapling: boolean;
   pricePerPage: number | null;
+  pageCount: number;
+};
+
+type PricingOption = {
+  id?: string;
+  paperSize: string;
+  colorMode: string;
+  price_per_page: number;
 };
 
 const PrintSpecifications = ({ 
   shopId, 
-  onSpecsChange 
+  onSpecsChange,
+  documentPageCount
 }: { 
   shopId: string | null;
   onSpecsChange: (specs: PrintSpecs) => void;
+  documentPageCount?: number;
 }) => {
   const [specs, setSpecs] = useState<PrintSpecs>({
     paperSize: 'A4',
-    colorMode: 'blackAndWhite',
+    colorMode: 'bw', // Changed default to 'bw'
     copies: 1,
     doubleSided: false,
     stapling: false,
-    pricePerPage: null
+    pricePerPage: null,
+    pageCount: documentPageCount || 1
   });
   
-  const [pricingOptions, setPricingOptions] = useState<{
-    paperSize: string;
-    colorMode: string;
-    price_per_page: number;
-  }[]>([]);
+  const [pricingOptions, setPricingOptions] = useState<PricingOption[]>([]);
   
   const [loading, setLoading] = useState(false);
+
+  // Update page count when document changes
+  useEffect(() => {
+    if (documentPageCount) {
+      setSpecs(prev => ({
+        ...prev,
+        pageCount: documentPageCount
+      }));
+    }
+  }, [documentPageCount]);
 
   // Fetch pricing options when shop changes
   useEffect(() => {
     if (shopId) {
       fetchPricingOptions();
+    } else {
+      // Reset price if no shop is selected
+      setSpecs(prev => ({
+        ...prev,
+        pricePerPage: null
+      }));
     }
   }, [shopId]);
 
@@ -64,29 +87,69 @@ const PrintSpecifications = ({
       setLoading(true);
       const { data, error } = await supabase
         .from('shop_pricing')
-        .select('paper_size, color_mode, price_per_page')
+        .select('id, paper_size, color_mode, price_per_page')
         .eq('shop_id', shopId);
         
       if (error) throw error;
       
-      setPricingOptions(data || []);
+      if (!data || data.length === 0) {
+        toast.error('This shop has no pricing options available');
+        setPricingOptions([]);
+        setSpecs(prev => ({
+          ...prev,
+          pricePerPage: null
+        }));
+        return;
+      }
       
-      // Set default pricing if available
-      if (data && data.length > 0) {
-        const matchingPricing = data.find(
-          p => p.paper_size === specs.paperSize && p.color_mode === specs.colorMode
-        );
+      // Transform the data to match our expected format
+      const formattedData = data.map(item => ({
+        id: item.id,
+        paperSize: item.paper_size,
+        colorMode: item.color_mode,
+        price_per_page: item.price_per_page
+      }));
+      
+      setPricingOptions(formattedData);
+      
+      // Try to find pricing for current specs
+      const matchingPricing = formattedData.find(
+        p => p.paperSize === specs.paperSize && p.colorMode === specs.colorMode
+      );
+      
+      if (matchingPricing) {
+        console.log(`Found matching pricing: ${matchingPricing.price_per_page} for ${specs.paperSize}, ${specs.colorMode}`);
+        setSpecs(prev => ({
+          ...prev,
+          pricePerPage: matchingPricing.price_per_page
+        }));
+      } else {
+        // If no matching pricing found, reset the price
+        console.log(`No matching pricing found for ${specs.paperSize}, ${specs.colorMode}`);
+        setSpecs(prev => ({
+          ...prev,
+          pricePerPage: null
+        }));
         
-        if (matchingPricing) {
+        // Try to set to a valid option
+        if (formattedData.length > 0) {
+          const firstOption = formattedData[0];
           setSpecs(prev => ({
             ...prev,
-            pricePerPage: matchingPricing.price_per_page
+            paperSize: firstOption.paperSize as PaperSize,
+            colorMode: firstOption.colorMode as ColorMode,
+            pricePerPage: firstOption.price_per_page
           }));
         }
       }
     } catch (error: any) {
       console.error('Error fetching pricing options:', error);
       toast.error(error.message || 'Failed to load pricing options');
+      setPricingOptions([]);
+      setSpecs(prev => ({
+        ...prev,
+        pricePerPage: null
+      }));
     } finally {
       setLoading(false);
     }
@@ -94,13 +157,22 @@ const PrintSpecifications = ({
 
   const updatePricePerPage = () => {
     const matchingPricing = pricingOptions.find(
-      p => p.paper_size === specs.paperSize && p.color_mode === specs.colorMode
+      p => p.paperSize === specs.paperSize && p.colorMode === specs.colorMode
     );
     
-    setSpecs(prev => ({
-      ...prev,
-      pricePerPage: matchingPricing ? matchingPricing.price_per_page : null
-    }));
+    if (matchingPricing) {
+      console.log(`Updating price to ${matchingPricing.price_per_page} for ${specs.paperSize}, ${specs.colorMode}`);
+      setSpecs(prev => ({
+        ...prev,
+        pricePerPage: matchingPricing.price_per_page
+      }));
+    } else {
+      console.log(`No pricing found for ${specs.paperSize}, ${specs.colorMode}`);
+      setSpecs(prev => ({
+        ...prev,
+        pricePerPage: null
+      }));
+    }
   };
 
   const handlePaperSizeChange = (value: string) => {
@@ -108,7 +180,17 @@ const PrintSpecifications = ({
       ...prev,
       paperSize: value as PaperSize
     }));
-    updatePricePerPage();
+    setTimeout(() => {
+      const matchingPricing = pricingOptions.find(
+        p => p.paperSize === value && p.colorMode === specs.colorMode
+      );
+      
+      setSpecs(prev => ({
+        ...prev,
+        paperSize: value as PaperSize,
+        pricePerPage: matchingPricing ? matchingPricing.price_per_page : null
+      }));
+    }, 0);
   };
 
   const handleColorModeChange = (value: string) => {
@@ -116,7 +198,17 @@ const PrintSpecifications = ({
       ...prev,
       colorMode: value as ColorMode
     }));
-    updatePricePerPage();
+    setTimeout(() => {
+      const matchingPricing = pricingOptions.find(
+        p => p.paperSize === specs.paperSize && p.colorMode === value
+      );
+      
+      setSpecs(prev => ({
+        ...prev,
+        colorMode: value as ColorMode,
+        pricePerPage: matchingPricing ? matchingPricing.price_per_page : null
+      }));
+    }, 0);
   };
 
   const handleCopiesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,6 +237,18 @@ const PrintSpecifications = ({
 
   const disabledState = !shopId || loading;
 
+  // Generate available paper size options based on what the shop offers
+  const availablePaperSizes = pricingOptions.length > 0 
+    ? [...new Set(pricingOptions.map(p => p.paperSize))]
+    : ['A4', 'A3', 'Letter', 'Legal'];
+    
+  // Generate available color mode options based on what the shop offers for the selected paper size
+  const availableColorModes = pricingOptions.length > 0
+    ? [...new Set(pricingOptions
+        .filter(p => p.paperSize === specs.paperSize)
+        .map(p => p.colorMode))]
+    : ['bw', 'color'];
+
   return (
     <Card className="bg-card shadow-sm">
       <CardHeader>
@@ -165,10 +269,11 @@ const PrintSpecifications = ({
                   <SelectValue placeholder="Select paper size" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="A4">A4</SelectItem>
-                  <SelectItem value="A3">A3</SelectItem>
-                  <SelectItem value="Letter">Letter</SelectItem>
-                  <SelectItem value="Legal">Legal</SelectItem>
+                  {availablePaperSizes.map((size) => (
+                    <SelectItem key={size} value={size}>
+                      {size}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -184,23 +289,40 @@ const PrintSpecifications = ({
                   <SelectValue placeholder="Select color mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="blackAndWhite">Black & White</SelectItem>
-                  <SelectItem value="color">Color</SelectItem>
+                  {availableColorModes.includes('bw') && (
+                    <SelectItem value="bw">Black & White</SelectItem>
+                  )}
+                  {availableColorModes.includes('color') && (
+                    <SelectItem value="color">Color</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
           </div>
           
-          <div className="space-y-2">
-            <Label htmlFor="copies">Number of Copies</Label>
-            <Input
-              id="copies"
-              type="number"
-              min="1"
-              value={specs.copies}
-              onChange={handleCopiesChange}
-              disabled={disabledState}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="copies">Number of Copies</Label>
+              <Input
+                id="copies"
+                type="number"
+                min="1"
+                value={specs.copies}
+                onChange={handleCopiesChange}
+                disabled={disabledState}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="page-count">Number of Pages</Label>
+              <Input
+                id="page-count"
+                type="number"
+                value={specs.pageCount}
+                readOnly
+                className="bg-muted"
+              />
+            </div>
           </div>
           
           <div className="flex items-center justify-between">
@@ -241,6 +363,15 @@ const PrintSpecifications = ({
           <div className="flex items-center gap-2 p-3 bg-amber-100/50 rounded-md text-sm text-amber-800">
             <Settings size={16} />
             <span>The selected shop doesn't have pricing for this configuration</span>
+          </div>
+        )}
+        
+        {specs.pricePerPage !== null && (
+          <div className="flex items-center gap-2 p-3 bg-green-100/50 rounded-md text-sm text-green-800">
+            <Settings size={16} />
+            <span>
+              Price per page: ₹{specs.pricePerPage.toFixed(2)} × {specs.pageCount} pages × {specs.copies} {specs.copies === 1 ? 'copy' : 'copies'}
+            </span>
           </div>
         )}
       </CardContent>

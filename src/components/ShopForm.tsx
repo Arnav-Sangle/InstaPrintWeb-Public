@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,52 +10,42 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+interface Location {
+  lat: number;
+  lng: number;
+}
+
 interface ShopFormProps {
   shopId?: string;
+  initialData?: any;
+  initialLocation?: Location | null;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
 
-const ShopForm: React.FC<ShopFormProps> = ({ shopId, onSuccess, onCancel }) => {
+const ShopForm: React.FC<ShopFormProps> = ({ 
+  shopId, 
+  initialData, 
+  initialLocation, 
+  onSuccess, 
+  onCancel 
+}) => {
   const { user } = useAuth();
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
-  const [description, setDescription] = useState('');
+  const [name, setName] = useState(initialData?.name || '');
+  const [address, setAddress] = useState(initialData?.address || '');
+  const [phone, setPhone] = useState(initialData?.phone || '');
+  const [description, setDescription] = useState(initialData?.description || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Load shop data if editing an existing shop
-  React.useEffect(() => {
-    const fetchShop = async () => {
-      if (!shopId) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('shops')
-          .select('*')
-          .eq('id', shopId)
-          .single();
-          
-        if (error) {
-          console.error('Error fetching shop:', error);
-          toast.error('Failed to load shop data');
-          return;
-        }
-        
-        if (data) {
-          setName(data.name);
-          setAddress(data.address);
-          setPhone(data.phone || '');
-          setDescription(data.description || '');
-        }
-      } catch (error) {
-        console.error('Error in fetchShop:', error);
-        toast.error('Something went wrong while loading shop data');
-      }
-    };
-    
-    fetchShop();
-  }, [shopId]);
+  // Initialize form with initialData when it changes
+  useEffect(() => {
+    if (initialData) {
+      setName(initialData.name || '');
+      setAddress(initialData.address || '');
+      setPhone(initialData.phone || '');
+      setDescription(initialData.description || '');
+    }
+  }, [initialData]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +63,8 @@ const ShopForm: React.FC<ShopFormProps> = ({ shopId, onSuccess, onCancel }) => {
             address,
             phone,
             description,
+            latitude: initialLocation?.lat || initialData?.latitude,
+            longitude: initialLocation?.lng || initialData?.longitude,
             updated_at: new Date().toISOString(),
           })
           .eq('id', shopId);
@@ -90,6 +82,8 @@ const ShopForm: React.FC<ShopFormProps> = ({ shopId, onSuccess, onCancel }) => {
             address,
             phone,
             description,
+            latitude: initialLocation?.lat || null,
+            longitude: initialLocation?.lng || null,
           });
           
         if (error) throw error;
@@ -109,7 +103,7 @@ const ShopForm: React.FC<ShopFormProps> = ({ shopId, onSuccess, onCancel }) => {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>{shopId ? 'Edit Shop' : 'Register New Shop'}</CardTitle>
+        <CardTitle>{shopId ? 'Edit Shop Details' : 'Register New Shop'}</CardTitle>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
@@ -159,6 +153,29 @@ const ShopForm: React.FC<ShopFormProps> = ({ shopId, onSuccess, onCancel }) => {
               disabled={isSubmitting}
             />
           </div>
+          
+          {initialLocation && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="latitude">Latitude</Label>
+                <Input
+                  id="latitude"
+                  value={initialLocation.lat.toFixed(6)}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="longitude">Longitude</Label>
+                <Input
+                  id="longitude"
+                  value={initialLocation.lng.toFixed(6)}
+                  readOnly
+                  disabled
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
         
         <CardFooter className="flex justify-end gap-2">
@@ -169,7 +186,7 @@ const ShopForm: React.FC<ShopFormProps> = ({ shopId, onSuccess, onCancel }) => {
               onClick={onCancel}
               disabled={isSubmitting}
             >
-              Cancel
+              Back to Map
             </Button>
           )}
           
