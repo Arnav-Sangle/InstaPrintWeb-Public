@@ -133,10 +133,10 @@ const AuthForm: React.FC = () => {
                     <RadioGroupItem value="shopkeeper" id="shopkeeper" disabled={isSubmitting || showVerificationMessage} />
                     <Label htmlFor="shopkeeper" className="flex-1 cursor-pointer">Print Shop Owner</Label>
                   </div>
-                  <div className="flex items-center space-x-2 rounded-md border p-3 bg-white/50 dark:bg-black/20">
+                  {/* <div className="flex items-center space-x-2 rounded-md border p-3 bg-white/50 dark:bg-black/20">
                     <RadioGroupItem value="admin" id="admin" disabled={isSubmitting || showVerificationMessage} />
                     <Label htmlFor="admin" className="flex-1 cursor-pointer">Administrator</Label>
-                  </div>
+                  </div> */}
                 </RadioGroup>
               </div>
             )}

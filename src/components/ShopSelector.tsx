@@ -179,8 +179,8 @@ const ShopSelector = ({ onShopSelected }: { onShopSelected: (shop: Shop) => void
                 {userLocation ? 'Change Your Location' : 'Set Your Location'}
               </Button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="h-[80vh] sm:h-[90vh]">
-              <SheetHeader className="mb-4">
+            <SheetContent side="bottom" className="h-[80vh] sm:h-[90vh] overflow-y-auto">
+              <SheetHeader className="mb-4 sticky top-0 z-10">
                 <SheetTitle>Select Your Location</SheetTitle>
                 <SheetDescription>
                   We'll use this to find the closest print shops to you

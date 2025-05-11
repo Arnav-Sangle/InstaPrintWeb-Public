@@ -19,6 +19,8 @@ export type Database = {
           file_path: string
           id: string
           paper_size: string
+          payment_method: string | null
+          payment_status: string | null
           price: number | null
           shop_id: string
           stapling: boolean
@@ -34,6 +36,8 @@ export type Database = {
           file_path: string
           id?: string
           paper_size: string
+          payment_method?: string | null
+          payment_status?: string | null
           price?: number | null
           shop_id: string
           stapling?: boolean
@@ -49,6 +53,8 @@ export type Database = {
           file_path?: string
           id?: string
           paper_size?: string
+          payment_method?: string | null
+          payment_status?: string | null
           price?: number | null
           shop_id?: string
           stapling?: boolean
@@ -56,6 +62,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_customer"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "print_jobs_shop_id_fkey"
             columns: ["shop_id"]
@@ -68,6 +81,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          email: string | null
           id: string
           name: string | null
           role: string
@@ -75,6 +89,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          email?: string | null
           id: string
           name?: string | null
           role: string
@@ -82,6 +97,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          email?: string | null
           id?: string
           name?: string | null
           role?: string
@@ -139,6 +155,7 @@ export type Database = {
           owner_id: string
           phone: string | null
           updated_at: string
+          upi_id: string | null
         }
         Insert: {
           address: string
@@ -151,6 +168,7 @@ export type Database = {
           owner_id: string
           phone?: string | null
           updated_at?: string
+          upi_id?: string | null
         }
         Update: {
           address?: string
@@ -163,6 +181,7 @@ export type Database = {
           owner_id?: string
           phone?: string | null
           updated_at?: string
+          upi_id?: string | null
         }
         Relationships: []
       }

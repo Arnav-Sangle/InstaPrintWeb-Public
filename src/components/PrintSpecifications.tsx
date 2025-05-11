@@ -52,6 +52,9 @@ const PrintSpecifications = ({
   
   const [loading, setLoading] = useState(false);
 
+  // Add a new state for the input value
+  const [copiesInput, setCopiesInput] = useState(specs.copies.toString());
+
   // Update page count when document changes
   useEffect(() => {
     if (documentPageCount) {
@@ -79,6 +82,11 @@ const PrintSpecifications = ({
   useEffect(() => {
     onSpecsChange(specs);
   }, [specs, onSpecsChange]);
+
+  // Update copiesInput when specs.copies changes from outside
+  useEffect(() => {
+    setCopiesInput(specs.copies.toString());
+  }, [specs.copies]);
 
   const fetchPricingOptions = async () => {
     if (!shopId) return;
@@ -212,13 +220,16 @@ const PrintSpecifications = ({
   };
 
   const handleCopiesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    if (isNaN(value) || value < 1) return;
+    const inputValue = e.target.value;
+    setCopiesInput(inputValue);
     
-    setSpecs(prev => ({
-      ...prev,
-      copies: value
-    }));
+    const numValue = parseInt(inputValue);
+    if (!isNaN(numValue) && numValue > 0) {
+      setSpecs(prev => ({
+        ...prev,
+        copies: numValue
+      }));
+    }
   };
 
   const handleDoubleSidedChange = (checked: boolean) => {
@@ -307,9 +318,16 @@ const PrintSpecifications = ({
                 id="copies"
                 type="number"
                 min="1"
-                value={specs.copies}
+                value={copiesInput}
                 onChange={handleCopiesChange}
                 disabled={disabledState}
+                onBlur={() => {
+                  // Reset to valid number on blur if input is invalid
+                  if (isNaN(parseInt(copiesInput)) || parseInt(copiesInput) < 1) {
+                    setCopiesInput('1');
+                    setSpecs(prev => ({ ...prev, copies: 1 }));
+                  }
+                }}
               />
             </div>
             

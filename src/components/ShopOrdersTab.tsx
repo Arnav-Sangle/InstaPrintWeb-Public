@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, FileText, Clock, Printer, AlertTriangle, CheckCircle, 
-  User, X, Eye, LucideIndianRupee 
+  User, X, Eye, LucideIndianRupee, Mail 
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Database } from '@/integrations/supabase/types';
+import { createClient } from '@supabase/supabase-js';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type PrintJobRow = Database['public']['Tables']['print_jobs']['Row'];
@@ -29,15 +30,21 @@ interface User {
 
 interface PrintJob extends DatabasePrintJob {
   customer_name: string;
+  customer_email: string;
 }
 
 interface PrintJobWithProfile extends DatabasePrintJob {
   profiles: Profile | null;
 }
 
-type PrintJobResponse = Omit<PrintJob, 'customer_name'> & {
-  profiles: User | null;
+type PrintJobResponse = Omit<PrintJob, 'customer_name' | 'customer_email'> & {
+  profiles: Profile | null;
 };
+
+interface ShopOrdersTabProps {
+  shopId?: string;
+  onOrderCompleted?: () => void;
+}
 
 const statusStyles = {
   pending: {
@@ -57,7 +64,7 @@ const statusStyles = {
   },
 };
 
-const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
+const ShopOrdersTab = ({ shopId, onOrderCompleted }: ShopOrdersTabProps) => {
   const { user } = useAuth();
   const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
   const [loading, setLoading] = useState(false);
@@ -73,7 +80,6 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
   const fetchPrintJobs = async (currentShopId: string, force: boolean = false) => {
     if (!user || !currentShopId) return;
 
-    // Only fetch if forced or if it's been more than 5 seconds since last fetch
     const now = Date.now();
     if (!force && now - lastFetchTime < 5000) {
       return;
@@ -82,13 +88,15 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
     try {
       setLoading(true);
       
-      // First fetch print jobs
       const { data: jobsData, error: jobsError } = await supabase
         .from('print_jobs')
-        .select('*')
+        .select(`
+          *,
+          profiles:customer_id(name, email)
+        `)
         .eq('shop_id', currentShopId)
         .order('created_at', { ascending: false });
-
+      
       if (jobsError) {
         console.error('Error fetching jobs:', jobsError);
         setError('Failed to load orders');
@@ -102,39 +110,19 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
         return;
       }
 
-      let customerProfiles: { id: string; name: string | null; }[] = [];
-
-      // Get unique customer IDs
-      const customerIds = [...new Set(jobsData.map(job => job.customer_id))];
-
-      try {
-        // Fetch customer profiles
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, name')
-          .in('id', customerIds);
-
-        if (profilesError) {
-          console.error('Error fetching customer profiles:', profilesError);
-        } else {
-          customerProfiles = profiles || [];
-        }
-      } catch (error) {
-        console.error('Error fetching customer profiles:', error);
-      }
-
-      // Map jobs with customer names
-      const jobsWithCustomerNames = jobsData.map(job => {
-        const customerProfile = customerProfiles.find(p => p.id === job.customer_id);
+      const jobsWithCustomerDetails = jobsData.map((job: any) => {
+        const customerProfile = job.profiles;
         const customerName = customerProfile?.name || 'Unknown Customer';
-        
+        const customerEmail = customerProfile?.email || 'Unknown Email';
+
         return {
           ...job,
-          customer_name: customerName
+          customer_name: customerName,
+          customer_email: customerEmail
         } as PrintJob;
       });
 
-      setPrintJobs(jobsWithCustomerNames);
+      setPrintJobs(jobsWithCustomerDetails);
       setError(null);
       setLastFetchTime(now);
     } catch (error: any) {
@@ -149,7 +137,6 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
   const fetchUserShops = async (force: boolean = false) => {
     if (!user) return;
 
-    // Only fetch if forced or if it's been more than 5 seconds since last fetch
     const now = Date.now();
     if (!force && now - lastFetchTime < 5000) {
       return;
@@ -205,10 +192,8 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
       }
     };
 
-    // Initial load
     loadShops(true);
 
-    // Handle visibility change
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && mounted) {
         retryCount = 0;
@@ -272,7 +257,6 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
       setupSubscription(selectedShopId);
     }
 
-    // Handle visibility change
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && mounted && selectedShopId) {
         retryCount = 0;
@@ -311,6 +295,12 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
         )
       );
 
+      if (onOrderCompleted) {
+        onOrderCompleted();
+      }
+
+      sendOrderCompletedEmail(jobId);
+
       toast.success('Order marked as completed');
     } catch (error: any) {
       console.error('Error completing order:', error);
@@ -318,28 +308,127 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
     }
   };
 
-  const cancelOrder = async (jobId: string) => {
+  const sendOrderCompletedEmail = async (orderId: string) => {
     try {
-      const { error } = await supabase
-        .from('print_jobs')
-        .update({ status: 'cancelled' })
-        .eq('id', jobId);
+      console.log("inside try mail")
+      // const { data, error } = await supabase.functions.invoke('send-order-completed-email', {
+      //   body: { orderId }
+      // });
 
-      if (error) throw error;
+      // if (error) {
+      //   console.error('Error sending order completed email:', error);
+      //   toast.error('Order marked as completed, but failed to send notification email');
+      // } else {
+      //   console.log('Order completed email sent:', data);
+      //   toast.success('Order completion notification email sent to customer');
+      // }
 
-      setPrintJobs(prevJobs => 
-        prevJobs.map(job => 
-          job.id === jobId 
-            ? { ...job, status: 'cancelled' } 
-            : job
-        )
-      );
+      //Arnav supa
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
-      setConfirmingCancelId(null);
-      toast.success('Order cancelled successfully');
-    } catch (error: any) {
-      console.error('Error cancelling order:', error);
-      toast.error(error.message || 'Failed to cancel order');
+      // const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      // const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required");
+      }
+      console.log("service key ok")
+
+
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      console.log("email client created")
+
+
+      // Get the order details along with customer information
+      const { data: orderData, error: orderError } = await supabase
+        .from("print_jobs")
+        .select(`
+          *,
+          profiles:customer_id(name, email)
+        `)
+        .eq("id", orderId)
+        .single();
+
+      if (orderError || !orderData) {
+        throw new Error(orderError?.message || "Order not found");
+      }
+      console.log("Got orders")
+
+      // Get shop details
+      const { data: shopData, error: shopError } = await supabase
+        .from("shops")
+        .select("name, address")
+        .eq("id", orderData.shop_id)
+        .single();
+
+      if (shopError || !shopData) {
+        throw new Error(shopError?.message || "Shop not found");
+      }
+      console.log("Got shops")
+
+      const customerEmail = orderData.profiles?.email;
+      const customerName = orderData.profiles?.name || "Customer";
+      if (!customerEmail) {
+        throw new Error("Customer email not found");
+      }
+      console.log("customerEmail", customerEmail)
+      
+      console.log("before genrate mail link")
+      const { data, error } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: customerEmail
+      })
+      console.log("after genrate mail link")
+
+      console.log("email data",data)
+      console.log("email error",error)
+
+    // // Send email using Supabase's email service
+    // const { error: emailError } = await supabase.auth.admin.generateLink({
+    //   type: 'magiclink',
+    //   email: customerEmail,
+    //   options: {
+    //     data: {
+    //       orderId: orderData.id,
+    //       shopName: shopData.name,
+    //       orderStatus: 'completed',
+    //       // Additional data for the email template
+    //       customTemplate: {
+    //         subject: "InstaPrint: Order Completed",
+    //         body: `<h1>InstaPrint</h1>
+    //                 <h2>Order Completed</h2>
+    //                 <p><b>Please proceed to collect</b> your Completed Order from the shop.</p>
+    //                 <p>View your Completed Order on our website <a href="${supabaseUrl}">InstaPrint</a></p>
+    //                 <p>Your order details:</p>
+    //                 <ul>
+    //                   <li>Order ID: ${orderData.id.substring(0, 8)}</li>
+    //                   <li>Shop: ${shopData.name}</li>
+    //                   <li>Location: ${shopData.address}</li>
+    //                   <li>Paper Size: ${orderData.paper_size}</li>
+    //                   <li>Copies: ${orderData.copies}</li>
+    //                   <li>Color Mode: ${orderData.color_mode === 'bw' ? 'Black & White' : 'Color'}</li>
+    //                   <li>Double-sided: ${orderData.double_sided ? 'Yes' : 'No'}</li>
+    //                   <li>Stapling: ${orderData.stapling ? 'Yes' : 'No'}</li>
+    //                   <li>Price: Rs. ${orderData.price?.toFixed(2) || '0.00'}</li>
+    //                 </ul>
+    //                 <p>Thank you for using InstaPrint!</p>`
+    //       }
+    //     }
+    //   }
+    // });
+
+    // if (emailError) {
+    //   throw new Error(emailError.message);
+    // }
+
+    // console.log(`Email sent to ${customerEmail} for order ${orderId}`);
+
+
+    } catch (error) {
+      console.error('Error sending order completed email:', error);
+      toast.error('Order marked as completed, but failed to send notification email');
     }
   };
 
@@ -494,11 +583,9 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
           )}
           
           <Tabs defaultValue="pending" value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-4">
+            <TabsList className="mb-2">
               <TabsTrigger value="pending">Pending</TabsTrigger>
               <TabsTrigger value="completed">Completed</TabsTrigger>
-              <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-              <TabsTrigger value="all">All Orders</TabsTrigger>
             </TabsList>
 
             <TabsContent value={activeTab}>
@@ -513,8 +600,6 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
                       ? "You don't have any pending print orders."
                       : activeTab === 'completed'
                       ? "You don't have any completed print orders."
-                      : activeTab === 'cancelled'
-                      ? "You don't have any cancelled print orders."
                       : "You don't have any print orders yet."}
                   </p>
                 </div>
@@ -557,13 +642,24 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-2 mt-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <p className="text-sm">
-                            <span className="text-muted-foreground">Customer:</span> {job.customer_name}
-                          </p>
+                        <div className="flex flex-col gap-2 mt-2">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <p className="text-sm">
+                              <span className="text-muted-foreground">Customer:</span> {job.customer_name}
+                            </p>
+                          </div>
+                          
+                          {job.customer_email && (
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-muted-foreground" />
+                              <p className="text-sm">
+                                <span className="text-muted-foreground">Email:</span> {job.customer_email}
+                              </p>
+                            </div>
+                          )}
                         </div>
-                        
+                      
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-y-2 text-sm">
                           <div>
                             <span className="text-muted-foreground">Paper:</span> {job.paper_size}
@@ -603,16 +699,6 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
                                 <CheckCircle className="mr-2 h-4 w-4" />
                                 Mark as Completed
                               </Button>
-                              
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => setConfirmingCancelId(job.id)}
-                              >
-                                <X className="mr-2 h-4 w-4" />
-                                Cancel Order
-                              </Button>
                             </>
                           )}
                         </div>
@@ -640,28 +726,6 @@ const ShopOrdersTab = ({ shopId }: { shopId?: string }) => {
               />
             )}
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!confirmingCancelId} onOpenChange={() => setConfirmingCancelId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cancel Order</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to cancel this print order? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex flex-col sm:flex-row sm:justify-end gap-2">
-            <Button variant="outline" onClick={() => setConfirmingCancelId(null)}>
-              No, Keep Order
-            </Button>
-            <Button 
-              variant="destructive" 
-              onClick={() => confirmingCancelId && cancelOrder(confirmingCancelId)}
-            >
-              Yes, Cancel Order
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

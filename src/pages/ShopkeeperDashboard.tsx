@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import UserRedirect from '@/components/UserRedirect';
@@ -5,7 +6,7 @@ import Navbar from '@/components/Navbar';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Printer, Settings, FileText, MapPin, Store, Clock, BarChart, Tag, CheckCircle } from 'lucide-react';
+import { Plus, Printer, Settings, FileText, MapPin, Store, Clock, BarChart, Tag, CheckCircle, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import ShopLocationForm from '@/components/ShopLocationForm';
@@ -21,6 +22,7 @@ const ShopkeeperDashboard = () => {
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [completedOrdersCount, setCompletedOrdersCount] = useState(0);
   const [totalSales, setTotalSales] = useState(0);
+  const [dailyEarnings, setDailyEarnings] = useState(0);
   
   // Fetch shops owned by the current user
   useEffect(() => {
@@ -82,16 +84,32 @@ const ShopkeeperDashboard = () => {
         setCompletedOrdersCount(completedOrders?.length || 0);
       }
       
-      // Fetch total sales
+      // Fetch total sales from all completed orders
       const { data: salesData, error: salesError } = await supabase
         .from('print_jobs')
         .select('price')
         .in('shop_id', shopIds)
-        .in('status', ['ready', 'processing']);
+        .eq('status', 'completed');
         
       if (!salesError && salesData) {
         const total = salesData.reduce((sum, order) => sum + (order.price || 0), 0);
         setTotalSales(total);
+      }
+      
+      // Calculate daily earnings - orders completed today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const { data: dailyData, error: dailyError } = await supabase
+        .from('print_jobs')
+        .select('price, updated_at')
+        .in('shop_id', shopIds)
+        .eq('status', 'completed')
+        .gte('updated_at', today.toISOString());
+        
+      if (!dailyError && dailyData) {
+        const dailyTotal = dailyData.reduce((sum, order) => sum + (order.price || 0), 0);
+        setDailyEarnings(dailyTotal);
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -141,6 +159,13 @@ const ShopkeeperDashboard = () => {
       setLoading(false);
     }
   };
+
+  // Function to refresh stats - will be passed to ShopOrdersTab
+  const refreshStats = () => {
+    if (shops.length > 0) {
+      fetchStats(shops.map(shop => shop.id));
+    }
+  };
   
   return (
     <UserRedirect requiredRole="shopkeeper">
@@ -168,7 +193,7 @@ const ShopkeeperDashboard = () => {
             
             {/* Dashboard stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-on-load">
-            <Card className="bg-card shadow-sm card-hover">
+              <Card className="bg-card shadow-sm card-hover">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Pending Orders</CardTitle>
                 </CardHeader>
@@ -204,7 +229,24 @@ const ShopkeeperDashboard = () => {
               
               <Card className="bg-card shadow-sm card-hover">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Sales</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Daily Earnings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <div className="mr-4 p-2 bg-primary/10 rounded-full">
+                      <CreditCard className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{dailyEarnings.toFixed(2)} Rs</div>
+                      <p className="text-xs text-muted-foreground">Today's revenue</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card shadow-sm card-hover">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Earnings</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center">
@@ -338,78 +380,12 @@ const ShopkeeperDashboard = () => {
                 </TabsContent>
                 
                 <TabsContent value="orders">
-                  <ShopOrdersTab />
+                  <ShopOrdersTab onOrderCompleted={refreshStats} />
                 </TabsContent>
                 
                 <TabsContent value="pricing">
                   <ShopPricingTab />
                 </TabsContent>
-                
-                {/* <TabsContent value="settings">
-                  <Card className="bg-card shadow-sm">
-                    <CardHeader>
-                      <CardTitle>Shop Settings</CardTitle>
-                      <CardDescription>
-                        Manage your shop locations and settings
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {loading ? (
-                        <div className="flex items-center justify-center py-10">
-                          <div className="rounded-md h-8 w-8 border-4 border-t-primary border-r-transparent border-l-transparent border-b-transparent animate-spin"></div>
-                        </div>
-                      ) : shops.length > 0 ? (
-                        <div className="space-y-6">
-                          <h3 className="text-lg font-medium">Your Shop Locations</h3>
-                          <div className="space-y-4">
-                            {shops.map((shop) => (
-                              <Card key={shop.id} className="bg-card shadow-sm">
-                                <CardHeader className="pb-2">
-                                  <CardTitle className="text-base">{shop.name}</CardTitle>
-                                </CardHeader>
-                                <CardContent className="pb-2">
-                                  <p className="text-sm text-muted-foreground">{shop.address}</p>
-                                  {shop.latitude && shop.longitude ? (
-                                    <div className="mt-2 flex items-center text-sm text-green-600">
-                                      <MapPin size={14} className="mr-1" />
-                                      Location: {shop.latitude.toFixed(6)}, {shop.longitude.toFixed(6)}
-                                    </div>
-                                  ) : (
-                                    <div className="mt-2 flex items-center text-sm text-amber-600">
-                                      <MapPin size={14} className="mr-1" />
-                                      No location set
-                                    </div>
-                                  )}
-                                </CardContent>
-                                <CardFooter>
-                                  <Button 
-                                    size="sm" 
-                                    onClick={() => setEditingShopId(shop.id)}
-                                  >
-                                    {shop.latitude && shop.longitude ? 'Update Location' : 'Set Location'}
-                                  </Button>
-                                </CardFooter>
-                              </Card>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                          <div className="p-5 bg-muted rounded-full mb-5">
-                            <MapPin size={48} className="text-muted-foreground" />
-                          </div>
-                          <h3 className="text-lg font-medium">No shops registered</h3>
-                          <p className="text-sm text-muted-foreground max-w-md mt-2 mb-4">
-                            Register your first print shop to manage locations
-                          </p>
-                          <Button onClick={() => setShowNewShopForm(true)}>
-                            Register New Shop
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </TabsContent> */}
               </Tabs>
             )}
           </div>

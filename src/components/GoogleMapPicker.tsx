@@ -24,13 +24,19 @@ declare global {
   }
 }
 
+//Declaring var for initial instance of marker
+var prevMarker;           //var is used, so that it can be accessed globally inside any func., and value is re-assignable/modifiable
+// var prevSrchMarker;
+// var prevCurrMarker;
+
 const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSelectLocation }) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<any>(null);
-  const [marker, setMarker] = useState<any>(null);
-  const [searchInput, setSearchInput] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState<Location | null>(initialLocation || null);
-  const [selectedAddress, setSelectedAddress] = useState<string>('');
+  // if "const" is used then marker cannot be re-assigned any value, so marker will always remain null, same for all the following
+  let [map, setMap] = useState<any>(null);
+  let [marker, setMarker] = useState<any>(null);
+  let [searchInput, setSearchInput] = useState('');
+  let [selectedLocation, setSelectedLocation] = useState<Location | null>(initialLocation || null);
+  let [selectedAddress, setSelectedAddress] = useState<string>('');
   
   // Default location (center of map if none provided)
   const defaultLocation = { lat: 37.7749, lng: -122.4194 }; // San Francisco
@@ -59,6 +65,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
     const googleMapScript = document.createElement('script');
 
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
     if (!apiKey) {
       console.error('Google Maps API key is missing');
       toast.error('Map configuration error. Please contact support.');
@@ -68,7 +75,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
     googleMapScript.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
     googleMapScript.async = true;
     googleMapScript.defer = true;
-    
+
     // Initialize map when script loads
     window.initMap = () => {
       if (mapRef.current) {
@@ -91,19 +98,21 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
             draggable: true,
             animation: window.google.maps.Animation.DROP
           });
-          
+
           setMarker(newMarker);
-          
+         
+          //Storing initial instance of marker
+          prevMarker = newMarker;
+          // prevSrchMarker = newMarker;
+          // prevCurrMarker = newMarker;
+
           // Get address for initial location
           getAddressFromLocation(selectedLocation);
           
           // Add click handler to remove marker
           newMarker.addListener('click', function() {
             newMarker.setMap(null);
-            setMarker(null);
             setSelectedLocation(null);
-            setSelectedAddress('');
-            onSelectLocation({ lat: 0, lng: 0 }, '');
           });
           
           // Update location when marker is dragged
@@ -117,21 +126,29 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
             getAddressFromLocation(newLocation);
           });
         }
-        
+
         // Add click event to place/move marker
         newMap.addListener('click', (e: any) => {
+
           const newLocation = {
             lat: e.latLng.lat(),
             lng: e.latLng.lng()
           };
           
-          setSelectedLocation(newLocation);
-          
           // Remove existing marker if exists
-          if (marker) {
-            marker.setMap(null);
+          if (prevMarker) {
+            prevMarker.setMap(null);
           }
-          
+          // console.log("prevMarker on Click", prevMarker)
+          // console.log("prevSrchMarker on Click", prevSrchMarker)
+          // console.log("prevCurrMarker on Click", prevCurrMarker)
+          console.log("Marker = Click loc: ", marker)
+          if (marker) {
+            marker.setMap(null)
+          }
+
+          setSelectedLocation(newLocation);
+
           // Create new marker
           const newMarker = new window.google.maps.Marker({
             position: newLocation,
@@ -139,19 +156,21 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
             draggable: true,
             animation: window.google.maps.Animation.DROP
           });
-          
+
+          // Storing initial instance of marker after update
+          prevMarker = newMarker;
+          // console.log("NewMarker = Update on Click loc: ",newMarker)
+          // console.log("Marker = Update on Click loc: ", marker)
+
           setMarker(newMarker);
-          
+
           // Get address for clicked location
           getAddressFromLocation(newLocation);
           
           // Add click handler to remove marker
           newMarker.addListener('click', function() {
             newMarker.setMap(null);
-            setMarker(null);
             setSelectedLocation(null);
-            setSelectedAddress('');
-            onSelectLocation({ lat: 0, lng: 0 }, '');
           });
           
           // Update location when marker is dragged
@@ -177,7 +196,8 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
     };
   }, []);
 
-  const handleSearch = () => {
+
+  let handleSearch = () => {
     if (!map || !searchInput) return;
     
     const geocoder = new window.google.maps.Geocoder();
@@ -188,15 +208,22 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
           lat: location.lat(),
           lng: location.lng()
         };
-        
+
         // Move map to new location
         map.setCenter(newLocation);
         
         // Remove existing marker if exists
-        if (marker) {
+        // console.log("Marker = Search loc: ", marker)
+        if(marker) {
           marker.setMap(null);
+          // console.log("Marker = After Search loc removal: ", marker)
         }
-        
+        if (prevMarker) {
+          prevMarker.setMap(null);
+        }
+
+        setSelectedLocation(newLocation);
+
         // Create new marker
         const newMarker = new window.google.maps.Marker({
           position: newLocation,
@@ -204,10 +231,15 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
           draggable: true,
           animation: window.google.maps.Animation.DROP
         });
-        
+
+        prevMarker = newMarker;
+        // prevSrchMarker = newMarker;
+        // console.log("prevSrchMarker on Srch", prevSrchMarker)
+        // console.log("NewMarker = Update on Search loc: ", newMarker)
+        // console.log("PrevMarker =  Update on Search loc: ", prevMarker)
+
         setMarker(newMarker);
-        setSelectedLocation(newLocation);
-        
+
         // Get address from search result
         const address = results[0].formatted_address;
         setSelectedAddress(address);
@@ -216,10 +248,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
         // Add click handler to remove marker
         newMarker.addListener('click', function() {
           newMarker.setMap(null);
-          setMarker(null);
           setSelectedLocation(null);
-          setSelectedAddress('');
-          onSelectLocation({ lat: 0, lng: 0 }, '');
         });
         
         // Update location when marker is dragged
@@ -236,7 +265,8 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
     });
   };
 
-  const handleGetCurrentLocation = () => {
+
+  let handleGetCurrentLocation = () => {
     if (navigator.geolocation && map) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -247,12 +277,20 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
           
           // Move map to new location
           map.setCenter(newLocation);
-          
+          // prevCurrLocation = prevMarker.getPosition();
+
           // Remove existing marker if exists
-          if (marker) {
+          // console.log("Marker = Curr loc: ", marker)
+          if(marker) {
             marker.setMap(null);
+            // console.log("Marker = After Curr loc removal: ", marker)
           }
-          
+          if (prevMarker) {
+            prevMarker.setMap(null);
+          }
+
+          setSelectedLocation(newLocation);
+
           // Create new marker
           const newMarker = new window.google.maps.Marker({
             position: newLocation,
@@ -261,19 +299,21 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
             animation: window.google.maps.Animation.DROP
           });
           
+          prevMarker = newMarker;
+          // prevCurrMarker = newMarker;
+          // console.log("prevCurrMarker on Curr", prevCurrMarker)
+          // console.log("PrevMarker = After 1st on Curr loc: ", prevMarker)
+          // console.log("Marker = Update on Curr loc: ", marker)
+
           setMarker(newMarker);
-          setSelectedLocation(newLocation);
-          
+
           // Get address for current location
           getAddressFromLocation(newLocation);
           
           // Add click handler to remove marker
           newMarker.addListener('click', function() {
             newMarker.setMap(null);
-            setMarker(null);
             setSelectedLocation(null);
-            setSelectedAddress('');
-            onSelectLocation({ lat: 0, lng: 0 }, '');
           });
           
           // Update location when marker is dragged

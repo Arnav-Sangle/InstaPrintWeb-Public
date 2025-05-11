@@ -1,19 +1,21 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import PricingManager from './PricingManager';
-import { Store, AlertTriangle } from 'lucide-react';
+import { Store, AlertTriangle, IndianRupee } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 type Shop = {
   id: string;
   name: string;
   address: string;
+  upi_id?: string | null;
 };
 
 const ShopPricingTab = () => {
@@ -23,6 +25,9 @@ const ShopPricingTab = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFetchTime, setLastFetchTime] = useState<number>(0);
+  
+  const [upiId, setUpiId] = useState<string>('');
+  const [savingUpi, setSavingUpi] = useState(false);
 
   const fetchShops = async (force: boolean = false) => {
     if (!user) return;
@@ -37,7 +42,7 @@ const ShopPricingTab = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('shops')
-        .select('id, name, address')
+        .select('id, name, address, upi_id')
         .eq('owner_id', user.id)
         .order('name');
         
@@ -48,6 +53,7 @@ const ShopPricingTab = () => {
       // Select the first shop by default if available
       if (data && data.length > 0 && !selectedShopId) {
         setSelectedShopId(data[0].id);
+        setUpiId(data[0].upi_id || '');
       }
       setError(null);
       setLastFetchTime(now);
@@ -101,6 +107,44 @@ const ShopPricingTab = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user]);
+
+  useEffect(() => {
+    if (selectedShopId) {
+      const selectedShop = shops.find(shop => shop.id === selectedShopId);
+      if (selectedShop) {
+        setUpiId(selectedShop.upi_id || '');
+      }
+    }
+  }, [selectedShopId, shops]);
+
+  const handleSaveUpiId = async () => {
+    if (!selectedShopId) {
+      toast.error('No shop selected');
+      return;
+    }
+
+    try {
+      setSavingUpi(true);
+      const { error } = await supabase
+        .from('shops')
+        .update({ upi_id: upiId })
+        .eq('id', selectedShopId);
+
+      if (error) throw error;
+      
+      toast.success('UPI ID saved successfully');
+      
+      // Update shops list with new UPI ID
+      setShops(shops.map(shop => 
+        shop.id === selectedShopId ? { ...shop, upi_id: upiId } : shop
+      ));
+    } catch (error: any) {
+      console.error('Error saving UPI ID:', error);
+      toast.error('Failed to save UPI ID');
+    } finally {
+      setSavingUpi(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -185,7 +229,13 @@ const ShopPricingTab = () => {
             <Label htmlFor="shop-select">Select Shop</Label>
             <Select
               value={selectedShopId || ''}
-              onValueChange={setSelectedShopId}
+              onValueChange={(value) => {
+                setSelectedShopId(value);
+                const selectedShop = shops.find(shop => shop.id === value);
+                if (selectedShop) {
+                  setUpiId(selectedShop.upi_id || '');
+                }
+              }}
             >
               <SelectTrigger id="shop-select">
                 <SelectValue placeholder="Select a shop" />
@@ -199,9 +249,38 @@ const ShopPricingTab = () => {
               </SelectContent>
             </Select>
           </div>
-          
+
           {selectedShopId && (
-            <PricingManager shopId={selectedShopId} />
+            <>
+              <div className="space-y-4 border-b pb-6">
+                <div className="space-y-2">
+                  <Label htmlFor="upi-id" className="flex items-center gap-2">
+                    <IndianRupee size={16} className="text-muted-foreground" />
+                    UPI ID
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="upi-id"
+                      placeholder="Enter your UPI ID (e.g. yourname@upi)"
+                      value={upiId}
+                      onChange={(e) => setUpiId(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button 
+                      onClick={handleSaveUpiId} 
+                      disabled={savingUpi}
+                    >
+                      {savingUpi ? 'Saving...' : 'Save UPI ID'}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Your UPI ID will be used for receiving direct payments from customers
+                  </p>
+                </div>
+              </div>
+              
+              <PricingManager shopId={selectedShopId} />
+            </>
           )}
         </div>
       </CardContent>

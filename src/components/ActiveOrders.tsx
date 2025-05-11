@@ -28,6 +28,7 @@ type PrintJob = {
   price: number;
   file_path: string;
   shop_name?: string;
+  // payment_Status?: string;
 };
 
 const statusStyles = {
@@ -134,7 +135,7 @@ const ActiveOrders = () => {
     let retryCount = 0;
     const MAX_RETRIES = 3;
 
-    console.log("inside useEffect")
+    // console.log("inside useEffect")
     
     const loadJobs = async (force: boolean = false) => {
       if (!mounted) return;
@@ -178,7 +179,7 @@ const ActiveOrders = () => {
 
     // Handle visibility change
     const handleVisibilityChange = () => {
-      console.log("inside handleVisibilityChange")
+      // console.log("inside handleVisibilityChange")
       if (document.visibilityState === 'visible' && mounted) {
         retryCount = 0;
         loadJobs(true); // Force refresh when tab becomes visible
@@ -214,29 +215,29 @@ const ActiveOrders = () => {
  
 
 
-  const cancelOrder = async (jobId: string) => {
-    try {
+  // const cancelOrder = async (jobId: string) => {
+  //   try {
 
-      setTimeout(async () => {
-        const { error } = await supabase
-          .from('print_jobs')
-          .update({ status: 'cancelled' })
-          .eq('id', jobId)
-          .eq('customer_id', user?.id);
+  //     setTimeout(async () => {
+  //       const { error } = await supabase
+  //         .from('print_jobs')
+  //         .update({ status: 'cancelled' })
+  //         .eq('id', jobId)
+  //         .eq('customer_id', user?.id);
 
-        if (error) throw error;
+  //       if (error) throw error;
 
-        // After cancellation, remove it from the displayed list
-        setPrintJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
+  //       // After cancellation, remove it from the displayed list
+  //       setPrintJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
 
-        toast.success('Order cancelled successfully');
-      }, supaCallTimeout) 
+  //       toast.success('Order cancelled successfully');
+  //     }, supaCallTimeout) 
 
-    } catch (error: any) {
-      console.error('Error cancelling order:', error);
-      toast.error(error.message || 'Failed to cancel order');
-    }
-  };
+  //   } catch (error: any) {
+  //     console.error('Error cancelling order:', error);
+  //     toast.error(error.message || 'Failed to cancel order');
+  //   }
+  // };
 
   const viewDocument = async (filePath: string) => {
     try {
@@ -401,7 +402,7 @@ const ActiveOrders = () => {
                       View Document
                     </Button>
                     
-                    {job.status === 'pending' && (
+                    {/* {job.status === 'pending' && (
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -410,7 +411,7 @@ const ActiveOrders = () => {
                       >
                         Cancel Order
                       </Button>
-                    )}
+                    )} */}
                   </div>
                 </div>
               );

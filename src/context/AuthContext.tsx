@@ -162,7 +162,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      //Wrapping content inside "supabase.auth.onAuthStateChange" in "setTimeout(async() => {})" function fixes the loading, auth and supabase services unresponsive error
       setTimeout(async() => {
         
         if (!mounted) return;

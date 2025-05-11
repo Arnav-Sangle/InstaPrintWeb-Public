@@ -25,6 +25,7 @@ type PrintJob = {
   price: number;
   file_path: string;
   shop_name?: string;
+  // payment_status?: string;
 };
 
 const statusStyles = {

@@ -1,2 +1,4 @@
 # Arnav supa
 project_id = "cbpndigqwfykiqjssfhi"
+
+send_emails = true  
