@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import UserRedirect from '@/components/UserRedirect';
 import Navbar from '@/components/Navbar';
@@ -9,9 +9,65 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileUp, Map, Clock, FileText, Printer, ShoppingBag } from 'lucide-react';
 import FileCheck from '@/components/FileCheck';
 import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import ActiveOrders from '@/components/ActiveOrders';
 
 const CustomerDashboard = () => {
   const { user } = useAuth();
+  const [stats, setStats] = useState({
+    activeOrders: 0,
+    completedOrders: 0,
+    favoriteShops: 0
+  });
+  
+  useEffect(() => {
+    if (user) {
+      fetchDashboardStats();
+    }
+  }, [user]);
+
+  const fetchDashboardStats = async () => {
+    if (!user) return;
+    
+    try {
+      // Count active orders (pending, processing)
+      const { count: activeCount, error: activeError } = await supabase
+        .from('print_jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('customer_id', user.id)
+        .in('status', ['pending', 'processing']);
+      
+      if (activeError) throw activeError;
+      
+      // Count completed orders
+      const { count: completedCount, error: completedError } = await supabase
+        .from('print_jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('customer_id', user.id)
+        .eq('status', 'ready');
+      
+      if (completedError) throw completedError;
+      
+      // For favorite shops (this would require a new table in a real app)
+      // For now, just count unique shops used
+      const { data: uniqueShops, error: shopsError } = await supabase
+        .from('print_jobs')
+        .select('shop_id')
+        .eq('customer_id', user.id);
+      
+      if (shopsError) throw shopsError;
+      
+      const uniqueShopIds = new Set(uniqueShops?.map(item => item.shop_id));
+      
+      setStats({
+        activeOrders: activeCount || 0,
+        completedOrders: completedCount || 0,
+        favoriteShops: uniqueShopIds.size || 0
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    }
+  };
   
   return (
     <UserRedirect requiredRole="customer">
@@ -48,7 +104,7 @@ const CustomerDashboard = () => {
                       <ShoppingBag className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <div className="text-2xl font-bold">0</div>
+                      <div className="text-2xl font-bold">{stats.activeOrders}</div>
                       <p className="text-xs text-muted-foreground">Current print jobs</p>
                     </div>
                   </div>
@@ -65,7 +121,7 @@ const CustomerDashboard = () => {
                       <FileCheck className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <div className="text-2xl font-bold">0</div>
+                      <div className="text-2xl font-bold">{stats.completedOrders}</div>
                       <p className="text-xs text-muted-foreground">Finished orders</p>
                     </div>
                   </div>
@@ -74,7 +130,7 @@ const CustomerDashboard = () => {
               
               <Card className="bg-card shadow-sm card-hover">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Favorite Shops</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Shops Used</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center">
@@ -82,8 +138,8 @@ const CustomerDashboard = () => {
                       <Printer className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <div className="text-2xl font-bold">0</div>
-                      <p className="text-xs text-muted-foreground">Saved print shops</p>
+                      <div className="text-2xl font-bold">{stats.favoriteShops}</div>
+                      <p className="text-xs text-muted-foreground">Different print shops</p>
                     </div>
                   </div>
                 </CardContent>
@@ -98,29 +154,7 @@ const CustomerDashboard = () => {
               </TabsList>
               
               <TabsContent value="orders" className="space-y-6">
-                <Card className="bg-card shadow-sm">
-                  <CardHeader>
-                    <CardTitle>My Active Orders</CardTitle>
-                    <CardDescription>
-                      Track and manage your current print jobs
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col items-center py-8">
-                    <div className="p-5 bg-muted rounded-full mb-5">
-                      <FileText size={48} className="text-muted-foreground" />
-                    </div>
-                    <h3 className="text-lg font-medium">No active orders</h3>
-                    <p className="text-sm text-muted-foreground max-w-md mt-2 text-center">
-                      You don't have any active print orders. Create a new print job to get started.
-                    </p>
-                    <Button className="mt-6 flex items-center gap-2" asChild>
-                      <Link to="/print-order">
-                        <FileUp size={16} />
-                        New Print Job
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
+                <ActiveOrders />
               </TabsContent>
               
               <TabsContent value="shops">
@@ -140,7 +174,9 @@ const CustomerDashboard = () => {
                       <p className="text-sm text-muted-foreground max-w-md mt-2">
                         Browse available print shops in your area
                       </p>
-                      <Button className="mt-6">View Map</Button>
+                      <Button className="mt-6" asChild>
+                        <Link to="/print-order">View Shops</Link>
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -158,10 +194,13 @@ const CustomerDashboard = () => {
                     <div className="p-5 bg-muted rounded-full mb-5">
                       <Clock size={48} className="text-muted-foreground" />
                     </div>
-                    <h3 className="text-lg font-medium">No order history</h3>
+                    <h3 className="text-lg font-medium">Order History</h3>
                     <p className="text-sm text-muted-foreground max-w-md mt-2">
-                      Your completed print orders will appear here
+                      View details of your completed print orders
                     </p>
+                    <Button className="mt-6" variant="outline" asChild>
+                      <Link to="/print-order">View History</Link>
+                    </Button>
                   </CardContent>
                 </Card>
               </TabsContent>
