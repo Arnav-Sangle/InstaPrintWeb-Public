@@ -268,7 +268,7 @@ const ActiveOrders = () => {
           <div className="p-4 bg-primary/10 rounded-full mb-4">
             <div className="h-6 w-6 border-2 border-t-primary border-r-transparent border-l-transparent border-b-transparent animate-spin"></div>
           </div>
-          <p className="text-sm text-muted-foreground">Loading your orders...</p>
+          <p className="text-sm text-muted-foreground">Loading active orders...</p>
         </CardContent>
       </Card>
     );

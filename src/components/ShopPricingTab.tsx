@@ -155,8 +155,11 @@ const ShopPricingTab = () => {
             Set and manage print pricing for your shops
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex justify-center py-10">
-          <div className="rounded-md h-8 w-8 border-4 border-t-primary border-r-transparent border-l-transparent border-b-transparent animate-spin"></div>
+        <CardContent className="flex flex-col items-center py-8">
+            <div className="p-4 bg-primary/10 rounded-full mb-4">
+              <div className="h-6 w-6 border-2 border-t-primary border-r-transparent border-l-transparent border-b-transparent animate-spin"></div>
+            </div>
+            <p className="text-sm text-muted-foreground">Loading price settings...</p>
         </CardContent>
       </Card>
     );
@@ -220,12 +223,12 @@ const ShopPricingTab = () => {
       <CardHeader>
         <CardTitle>Pricing Management</CardTitle>
         <CardDescription>
-          Set and manage print pricing for your shops
+          Set and manage print pricing for your shop
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          <div className="space-y-2">
+          {/* <div className="space-y-2">
             <Label htmlFor="shop-select">Select Shop</Label>
             <Select
               value={selectedShopId || ''}
@@ -248,7 +251,7 @@ const ShopPricingTab = () => {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </div> */}
 
           {selectedShopId && (
             <>

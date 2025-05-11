@@ -176,10 +176,11 @@ const PricingManager: React.FC<PricingManagerProps> = ({ shopId }) => {
   if (loading) {
     return (
       <Card>
-        <CardContent className="p-6">
-          <div className="flex justify-center">
-            <div className="rounded-md h-8 w-8 border-4 border-t-primary border-r-transparent border-l-transparent border-b-transparent animate-spin"></div>
-          </div>
+        <CardContent className="flex flex-col items-center py-8">
+            <div className="p-4 bg-primary/10 rounded-full mb-4">
+              <div className="h-6 w-6 border-2 border-t-primary border-r-transparent border-l-transparent border-b-transparent animate-spin"></div>
+            </div>
+            <p className="text-sm text-muted-foreground">Loading price settings...</p>
         </CardContent>
       </Card>
     );

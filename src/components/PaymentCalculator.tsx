@@ -29,7 +29,7 @@ const PaymentCalculator = ({
   const [loading, setLoading] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [shopUpiId, setShopUpiId] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'upi'>('razorpay');
+  const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'upi'>('upi');
   const [copied, setCopied] = useState(false);
   const [orderCompleted, setOrderCompleted] = useState(false);
   const [paymentVerifying, setPaymentVerifying] = useState(false);
@@ -69,7 +69,7 @@ const PaymentCalculator = ({
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/payment-button.js';
       script.async = true;
-      script.dataset.payment_button_id = 'pl_MzMLRg8qBmJFbQ'; // Replace with your actual Razorpay payment button ID
+      script.dataset.payment_button_id = 'pl_Ov1E8xLoYmOneH'; // Replace with your actual Razorpay payment button ID pl_Ov1E8xLoYmOneH pl_MzMLRg8qBmJFbQ
       
       // Get the razorpay-payment container element
       const container = document.getElementById('razorpay-payment-button-container');
@@ -96,10 +96,10 @@ const PaymentCalculator = ({
     // (but we don't reduce the actual number of pages that need to be printed)
     let effectivePages = totalPages;
     if (printSpecs.doubleSided && totalPages > 1) {
-      // For double-sided, we calculate ceiling of pages/2 for sheets needed
-      // then multiply by 2 for actual printed sides
-      const sheetsNeeded = Math.ceil(totalPages / 2);
-      effectivePages = sheetsNeeded * 2;
+      // // For double-sided, we calculate ceiling of pages/2 for sheets needed, round off incase of decimal to ceiling
+      
+      // const sheetsNeeded = Math.ceil(totalPages / 2);
+      // effectivePages = sheetsNeeded;
     }
     
     // Calculate base price using the correct price per page from the shop's pricing
@@ -318,14 +318,7 @@ const PaymentCalculator = ({
             <div className="flex justify-between items-center">
               <div className="text-sm font-medium">Select payment method:</div>
               <div className="flex gap-2">
-                <Button 
-                  size="sm" 
-                  variant={paymentMethod === 'razorpay' ? 'default' : 'outline'}
-                  onClick={() => setPaymentMethod('razorpay')}
-                >
-                  Razorpay
-                </Button>
-                {shopUpiId && (
+              {shopUpiId && (
                   <Button 
                     size="sm" 
                     variant={paymentMethod === 'upi' ? 'default' : 'outline'}
@@ -334,29 +327,15 @@ const PaymentCalculator = ({
                     UPI
                   </Button>
                 )}
+                <Button 
+                  size="sm" 
+                  variant={paymentMethod === 'razorpay' ? 'default' : 'outline'}
+                  onClick={() => setPaymentMethod('razorpay')}
+                >
+                  Razorpay
+                </Button>
               </div>
             </div>
-            
-            {paymentMethod === 'razorpay' && (
-              <div className="space-y-4">
-                <div className="text-center mb-2 text-sm text-muted-foreground">Pay securely via Razorpay</div>
-                <div id="razorpay-payment-button-container" className="flex justify-center">
-                  {/* Razorpay button will be injected here */}
-                  <Button 
-                    className="w-full"
-                    onClick={() => {
-                      toast.success('This is a test environment. In production, the Razorpay payment flow would appear here.');
-                      setOrderCompleted(true);
-                      setTimeout(() => {
-                        onOrderPlaced();
-                      }, 1500);
-                    }}
-                  >
-                    Pay ₹{totalPrice.toFixed(2)} with Razorpay
-                  </Button>
-                </div>
-              </div>
-            )}
             
             {paymentMethod === 'upi' && shopUpiId && (
               <div className="space-y-4">
@@ -391,7 +370,7 @@ const PaymentCalculator = ({
                   
                   {/* <Alert variant="destructive">  */}
                   <Alert variant="default"> 
-                    <AlertDescription className="text-sm">
+                    <AlertDescription className="text-sm flex items-center justify-center">
                       Once you've completed the payment, click the "I've Paid" button below.
                     </AlertDescription>
                   </Alert>
@@ -407,6 +386,29 @@ const PaymentCalculator = ({
                 </div>
               </div>
             )}
+
+            {paymentMethod === 'razorpay' && (
+              <div className="space-y-4">
+                <div className="text-center mb-2 text-sm text-muted-foreground">Pay securely via Razorpay</div>
+                <div id="razorpay-payment-button-container" className="flex justify-center">
+                  {/* Razorpay button will be injected here */}
+                  <Button 
+                    className="w-full"
+                    onClick={() => {
+                      toast.error('This is a test environment. In production, the Razorpay payment flow would appear here.');
+                      setOrderCompleted(true);
+                      setTimeout(() => {
+                        onOrderPlaced();
+                      }, 1500);
+                    }}
+                  >
+                    Pay ₹{totalPrice.toFixed(2)} with Razorpay
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            
           </div>
         )}
         
