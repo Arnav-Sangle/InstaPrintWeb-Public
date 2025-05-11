@@ -1,376 +1,393 @@
 
-import React from 'react';
-import Navbar from '@/components/Navbar';
-import UserRedirect from '@/components/UserRedirect';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Button } from '@/components/ui/button';
+import UserRedirect from '@/components/UserRedirect';
+import Navbar from '@/components/Navbar';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, CheckCircle, FileText, Printer, Settings, Package, PieChart, Clock, X } from 'lucide-react';
+import { Plus, Printer, Settings, FileText, MapPin, Store, Clock, BarChart, Tag, CheckCircle, CreditCard } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import ShopLocationForm from '@/components/ShopLocationForm';
+import ShopPricingTab from '@/components/ShopPricingTab';
+import ShopOrdersTab from '@/components/ShopOrdersTab';
 
 const ShopkeeperDashboard = () => {
   const { user } = useAuth();
+  const [shops, setShops] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showNewShopForm, setShowNewShopForm] = useState(false);
+  const [editingShopId, setEditingShopId] = useState<string | null>(null);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+  const [completedOrdersCount, setCompletedOrdersCount] = useState(0);
+  const [totalSales, setTotalSales] = useState(0);
+  const [dailyEarnings, setDailyEarnings] = useState(0);
   
-  // Mock print jobs (in a real app, these would come from an API)
-  const pendingJobs = [
-    {
-      id: 'ORD-003',
-      customer: 'John Doe',
-      date: '2023-10-20',
-      totalPages: 25,
-      price: '$7.50',
-      files: ['report.pdf'],
-      colorMode: 'Color',
-      paperSize: 'A4',
-      copies: 1,
-      doubleSided: true
-    },
-    {
-      id: 'ORD-004',
-      customer: 'Jane Smith',
-      date: '2023-10-20',
-      totalPages: 8,
-      price: '$2.40',
-      files: ['document.pdf'],
-      colorMode: 'Black & White',
-      paperSize: 'Letter',
-      copies: 2,
-      doubleSided: false
+  // Fetch shops owned by the current user
+  useEffect(() => {
+    const fetchShops = async () => {
+      if (!user) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('shops')
+          .select('*')
+          .eq('owner_id', user.id)
+          .order('created_at', { ascending: false });
+          
+        if (error) {
+          console.error('Error fetching shops:', error);
+          toast.error('Failed to load your shops');
+          return;
+        }
+        
+        setShops(data || []);
+
+        // If we have shops, fetch stats
+        if (data && data.length > 0) {
+          fetchStats(data.map(shop => shop.id));
+        }
+      } catch (error) {
+        console.error('Error in fetchShops:', error);
+        toast.error('Something went wrong while loading your shops');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchShops();
+  }, [user]);
+
+  // Fetch dashboard statistics
+  const fetchStats = async (shopIds: string[]) => {
+    try {
+      // Fetch pending orders count
+      const { data: pendingOrders, error: pendingError } = await supabase
+        .from('print_jobs')
+        .select('id', { count: 'exact' })
+        .in('shop_id', shopIds)
+        .eq('status', 'pending');
+        
+      if (!pendingError) {
+        setPendingOrdersCount(pendingOrders?.length || 0);
+      }
+
+      // Fetch completed orders count
+      const { data: completedOrders, error: completedError } = await supabase
+        .from('print_jobs')
+        .select('id', { count: 'exact' })
+        .in('shop_id', shopIds)
+        .eq('status', 'completed');
+        
+      if (!completedError) {
+        setCompletedOrdersCount(completedOrders?.length || 0);
+      }
+      
+      // Fetch total sales from all completed orders
+      const { data: salesData, error: salesError } = await supabase
+        .from('print_jobs')
+        .select('price')
+        .in('shop_id', shopIds)
+        .eq('status', 'completed');
+        
+      if (!salesError && salesData) {
+        const total = salesData.reduce((sum, order) => sum + (order.price || 0), 0);
+        setTotalSales(total);
+      }
+      
+      // Calculate daily earnings - orders completed today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const { data: dailyData, error: dailyError } = await supabase
+        .from('print_jobs')
+        .select('price, updated_at')
+        .in('shop_id', shopIds)
+        .eq('status', 'completed')
+        .gte('updated_at', today.toISOString());
+        
+      if (!dailyError && dailyData) {
+        const dailyTotal = dailyData.reduce((sum, order) => sum + (order.price || 0), 0);
+        setDailyEarnings(dailyTotal);
+      }
+    } catch (error) {
+      console.error('Error fetching stats:', error);
     }
-  ];
+  };
   
-  const processingJobs = [
-    {
-      id: 'ORD-002',
-      customer: 'Alex Johnson',
-      date: '2023-10-18',
-      totalPages: 35,
-      price: '$12.25',
-      files: ['presentation.pptx', 'notes.pdf'],
-      colorMode: 'Color',
-      paperSize: 'A4',
-      copies: 1,
-      doubleSided: true
+  const handleNewShopSuccess = () => {
+    setShowNewShopForm(false);
+    setLoading(true);
+    // Refetch shops
+    fetchShops();
+  };
+  
+  const handleEditLocationSuccess = () => {
+    setEditingShopId(null);
+    setLoading(true);
+    // Refetch shops
+    fetchShops();
+  };
+  
+  const fetchShops = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('shops')
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error('Error fetching shops:', error);
+        toast.error('Failed to load your shops');
+        return;
+      }
+      
+      setShops(data || []);
+      
+      // If we have shops, fetch stats
+      if (data && data.length > 0) {
+        fetchStats(data.map(shop => shop.id));
+      }
+    } catch (error) {
+      console.error('Error in fetchShops:', error);
+      toast.error('Something went wrong while loading your shops');
+    } finally {
+      setLoading(false);
     }
-  ];
-  
-  // Mock shop statistics
-  const shopStats = {
-    totalOrders: 124,
-    completedOrders: 118,
-    pendingOrders: 6,
-    totalRevenue: '$2,450.75'
+  };
+
+  // Function to refresh stats - will be passed to ShopOrdersTab
+  const refreshStats = () => {
+    if (shops.length > 0) {
+      fetchStats(shops.map(shop => shop.id));
+    }
   };
   
   return (
     <UserRedirect requiredRole="shopkeeper">
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen dashboard-gradient">
         <Navbar />
         
-        <div className="container px-4 md:px-6 pt-28 pb-16">
-          <div className="max-w-6xl mx-auto">
-            <header className="mb-10">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-                <div>
-                  <h1 className="text-3xl font-bold tracking-tight animate-fade-in">Shop Dashboard</h1>
-                  <p className="text-muted-foreground animate-fade-in" style={{ animationDelay: '0.1s' }}>
-                    Manage print jobs and shop settings
-                  </p>
-                </div>
+        <div className="container px-4 md:px-6 pt-28 pb-16 md:pt-36 md:pb-20">
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="animate-on-load">
+                <h1 className="text-3xl font-bold tracking-tight">Print Shop Dashboard</h1>
+                <p className="text-muted-foreground mt-1">
+                  Welcome back, {user?.name || 'Shop Owner'}
+                </p>
+              </div>
+              
+              {/* <Button 
+                className="flex items-center gap-2 shadow-sm animate-on-load"
+                onClick={() => setShowNewShopForm(true)}
+              >
+                <Plus size={16} />
+                Register New Shop
+              </Button> */}
+            </div>
+            
+            {/* Dashboard stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-on-load">
+              <Card className="bg-card shadow-sm card-hover">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Pending Orders</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <div className="mr-4 p-2 bg-primary/10 rounded-full">
+                      <Clock className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{pendingOrdersCount}</div>
+                      <p className="text-xs text-muted-foreground">Awaiting processing</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-card shadow-sm card-hover">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Completed Orders</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <div className="mr-4 p-2 bg-primary/10 rounded-full">
+                      <CheckCircle className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{completedOrdersCount}</div>
+                      <p className="text-xs text-muted-foreground">Marked Completed</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-card shadow-sm card-hover">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Daily Earnings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <div className="mr-4 p-2 bg-primary/10 rounded-full">
+                      <CreditCard className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{dailyEarnings.toFixed(2)} Rs</div>
+                      <p className="text-xs text-muted-foreground">Today's revenue</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card shadow-sm card-hover">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Earnings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <div className="mr-4 p-2 bg-primary/10 rounded-full">
+                      <BarChart className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{totalSales.toFixed(2)} Rs</div>
+                      <p className="text-xs text-muted-foreground">Lifetime revenue</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            
+            {showNewShopForm ? (
+              <Card className="bg-card shadow-sm animate-on-load">
+                <CardHeader>
+                  <CardTitle>Set Up New Shop</CardTitle>
+                  <CardDescription>
+                    First, select your shop location on the map
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ShopLocationForm 
+                    onSuccess={handleNewShopSuccess}
+                    onCancel={() => setShowNewShopForm(false)}
+                  />
+                </CardContent>
+              </Card>
+            ) : editingShopId ? (
+              <Card className="bg-card shadow-sm animate-on-load">
+                <CardHeader>
+                  <CardTitle>Edit Shop Location</CardTitle>
+                  <CardDescription>
+                    Update your shop location on the map
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ShopLocationForm 
+                    shopId={editingShopId}
+                    onSuccess={handleEditLocationSuccess}
+                    onCancel={() => setEditingShopId(null)}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <Tabs defaultValue="shops" className="w-full animate-on-load">
+                <TabsList className="grid grid-cols-3 max-w-md mb-8">
+                  <TabsTrigger value="shops">My Shop</TabsTrigger>
+                  <TabsTrigger value="orders">Print Orders</TabsTrigger>
+                  <TabsTrigger value="pricing">Pricing</TabsTrigger>
+                  {/* <TabsTrigger value="settings">Settings</TabsTrigger> */}
+                </TabsList>
                 
-                <div className="flex items-center gap-2 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span className="text-sm font-medium">Shop is Open</span>
-                  <Button variant="outline" size="sm" className="ml-2">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Shop Settings
-                  </Button>
-                </div>
-              </div>
-            </header>
-            
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-              <Card className="glass animate-scale-in">
-                <CardHeader className="pb-2">
-                  <CardDescription>Total Orders</CardDescription>
-                  <CardTitle className="text-3xl">{shopStats.totalOrders}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xs text-muted-foreground">
-                    All time
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="glass animate-scale-in" style={{ animationDelay: '0.1s' }}>
-                <CardHeader className="pb-2">
-                  <CardDescription>Completed</CardDescription>
-                  <CardTitle className="text-3xl">{shopStats.completedOrders}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xs text-muted-foreground">
-                    {((shopStats.completedOrders / shopStats.totalOrders) * 100).toFixed(1)}% completion rate
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="glass animate-scale-in" style={{ animationDelay: '0.2s' }}>
-                <CardHeader className="pb-2">
-                  <CardDescription>Pending</CardDescription>
-                  <CardTitle className="text-3xl">{shopStats.pendingOrders}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xs text-muted-foreground">
-                    Awaiting action
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="glass animate-scale-in" style={{ animationDelay: '0.3s' }}>
-                <CardHeader className="pb-2">
-                  <CardDescription>Revenue</CardDescription>
-                  <CardTitle className="text-3xl">{shopStats.totalRevenue}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xs text-muted-foreground">
-                    Total earnings
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            
-            <div className="mb-10 glass rounded-xl p-6 animate-scale-in" style={{ animationDelay: '0.2s' }}>
-              <h2 className="text-2xl font-semibold mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <Button variant="outline" className="h-auto py-6 flex flex-col items-center justify-center gap-2 bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/30">
-                  <Printer className="h-6 w-6" />
-                  <span>Printer Status</span>
-                </Button>
-                <Button variant="outline" className="h-auto py-6 flex flex-col items-center justify-center gap-2 bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/30">
-                  <Package className="h-6 w-6" />
-                  <span>Manage Orders</span>
-                </Button>
-                <Button variant="outline" className="h-auto py-6 flex flex-col items-center justify-center gap-2 bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/30">
-                  <PieChart className="h-6 w-6" />
-                  <span>View Reports</span>
-                </Button>
-                <Button variant="outline" className="h-auto py-6 flex flex-col items-center justify-center gap-2 bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/30">
-                  <Settings className="h-6 w-6" />
-                  <span>Shop Settings</span>
-                </Button>
-              </div>
-            </div>
-            
-            <Tabs defaultValue="pending">
-              <TabsList className="mb-6">
-                <TabsTrigger value="pending">
-                  <AlertCircle className="h-4 w-4 mr-2" />
-                  Pending Jobs
-                </TabsTrigger>
-                <TabsTrigger value="processing">
-                  <Printer className="h-4 w-4 mr-2" />
-                  Processing
-                </TabsTrigger>
-                <TabsTrigger value="ready">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Ready for Pickup
-                </TabsTrigger>
-                <TabsTrigger value="completed">
-                  <Package className="h-4 w-4 mr-2" />
-                  Completed
-                </TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="pending" className="animate-fade-in">
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-semibold">Pending Print Jobs</h2>
-                  
-                  {pendingJobs.map((job) => (
-                    <Card key={job.id} className="overflow-hidden glass">
-                      <CardHeader className="bg-white/30 dark:bg-black/10">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-xl">Order #{job.id}</CardTitle>
-                            <CardDescription>{job.customer} • {job.date}</CardDescription>
-                          </div>
-                          <div className="px-3 py-1 rounded-full text-sm bg-yellow-100 text-yellow-800">
-                            Pending Approval
-                          </div>
-                        </div>
+                <TabsContent value="shops" className="space-y-6">
+                  <Card className="bg-card shadow-sm"> 
+                    <CardHeader>
+                        <CardTitle>My Shop</CardTitle>
+                        <CardDescription>
+                          Manage your shop location settings
+                        </CardDescription>
                       </CardHeader>
-                      <CardContent className="pt-6">
-                        <div className="grid grid-cols-2 gap-6">
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground mb-2">Files</p>
-                            <div className="space-y-2">
-                              {job.files.map((file, index) => (
-                                <div key={index} className="flex items-center">
-                                  <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
-                                  <span className="text-sm">{file}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground mb-2">Print Details</p>
-                            <div className="space-y-1">
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">Mode:</span> {job.colorMode}
-                              </p>
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">Size:</span> {job.paperSize}
-                              </p>
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">Copies:</span> {job.copies}
-                              </p>
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">Double-sided:</span> {job.doubleSided ? 'Yes' : 'No'}
-                              </p>
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">Pages:</span> {job.totalPages}
-                              </p>
-                              <p className="text-sm font-medium mt-1">
-                                <span className="text-muted-foreground">Price:</span> {job.price}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                      <CardFooter className="flex justify-end gap-3 border-t bg-white/30 dark:bg-black/10">
-                        <Button variant="outline" size="sm">
-                          <X className="h-4 w-4 mr-2" />
-                          Reject
-                        </Button>
-                        <Button size="sm">
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Accept & Print
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                  
-                  {pendingJobs.length === 0 && (
-                    <Card className="glass text-center py-12">
-                      <CardContent>
-                        <div className="mx-auto rounded-full bg-secondary w-12 h-12 flex items-center justify-center mb-4">
-                          <FileText className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                        <h3 className="text-xl font-medium mb-2">No pending jobs</h3>
-                        <p className="text-muted-foreground">
-                          There are no pending print jobs at the moment.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="processing" className="animate-fade-in">
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-semibold">Processing Jobs</h2>
-                  
-                  {processingJobs.map((job) => (
-                    <Card key={job.id} className="overflow-hidden glass">
-                      <CardHeader className="bg-white/30 dark:bg-black/10">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-xl">Order #{job.id}</CardTitle>
-                            <CardDescription>{job.customer} • {job.date}</CardDescription>
-                          </div>
-                          <div className="px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-                            Processing
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-6">
-                        <div className="grid grid-cols-2 gap-6">
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground mb-2">Files</p>
-                            <div className="space-y-2">
-                              {job.files.map((file, index) => (
-                                <div key={index} className="flex items-center">
-                                  <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
-                                  <span className="text-sm">{file}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground mb-2">Print Details</p>
-                            <div className="space-y-1">
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">Mode:</span> {job.colorMode}
-                              </p>
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">Size:</span> {job.paperSize}
-                              </p>
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">Pages:</span> {job.totalPages}
-                              </p>
-                              <p className="text-sm font-medium mt-1">
-                                <span className="text-muted-foreground">Price:</span> {job.price}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                      <CardFooter className="flex justify-end gap-3 border-t bg-white/30 dark:bg-black/10">
-                        <Button size="sm">
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Mark as Ready
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                  
-                  {processingJobs.length === 0 && (
-                    <Card className="glass text-center py-12">
-                      <CardContent>
-                        <div className="mx-auto rounded-full bg-secondary w-12 h-12 flex items-center justify-center mb-4">
-                          <Printer className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                        <h3 className="text-xl font-medium mb-2">No jobs in progress</h3>
-                        <p className="text-muted-foreground">
-                          There are no print jobs currently being processed.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="ready" className="animate-fade-in">
-                <Card className="glass text-center py-12">
-                  <CardContent>
-                    <div className="mx-auto rounded-full bg-secondary w-12 h-12 flex items-center justify-center mb-4">
-                      <CheckCircle className="h-6 w-6 text-muted-foreground" />
+
+                    {loading ? (
+                    <div className="flex items-center justify-center py-10">
+                      <div className="rounded-md h-8 w-8 border-4 border-t-primary border-r-transparent border-l-transparent border-b-transparent animate-spin"></div>
                     </div>
-                    <h3 className="text-xl font-medium mb-2">No orders ready for pickup</h3>
-                    <p className="text-muted-foreground">
-                      There are no print jobs ready for customer pickup at the moment.
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="completed" className="animate-fade-in">
-                <Card className="glass text-center py-12">
-                  <CardContent>
-                    <div className="mx-auto rounded-full bg-secondary w-12 h-12 flex items-center justify-center mb-4">
-                      <Package className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <h3 className="text-xl font-medium mb-2">Completed orders history</h3>
-                    <p className="text-muted-foreground mb-6">
-                      View your order history and completed print jobs
-                    </p>
-                    <Button>
-                      <Clock className="h-4 w-4 mr-2" />
-                      View Order History
-                    </Button>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
+                    ) : shops.length > 0 ? (
+                      <div className="space-y-6 px-6 pb-6">
+                      {/* <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"> */}
+                        <div className="space-y-4">
+                          {shops.map((shop) => (
+                            <Card key={shop.id} className="bg-card shadow-sm overflow-hidden hover:shadow-md transition-shadow card-hover">
+                              <CardHeader className="pb-3">
+                                <CardTitle>{shop.name}</CardTitle>
+                                <CardDescription className="flex items-center gap-1">
+                                  <MapPin size={14} />
+                                  {shop.address}
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                <p className="line-clamp-2 text-sm text-muted-foreground">
+                                  {shop.description || 'No description provided.'}
+                                </p>
+                                {shop.latitude && shop.longitude ? (
+                                  <div className="mt-3 flex items-center text-xs text-green-600">
+                                    <MapPin size={12} className="mr-1" />
+                                    Location set: {shop.latitude.toFixed(4)}, {shop.longitude.toFixed(4)}
+                                  </div>
+                                ) : (
+                                  <div className="mt-3 flex items-center text-xs text-amber-600">
+                                    <MapPin size={12} className="mr-1" />
+                                    No location set
+                                  </div>
+                                )}
+                              </CardContent>
+                              <CardFooter className="border-t px-6 py-4 bg-muted/50 flex justify-center">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => setEditingShopId(shop.id)}
+                                >
+                                  {shop.latitude && shop.longitude ? 'Update Location' : 'Set Location'}
+                                </Button>
+                              </CardFooter>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <Card className="bg-card shadow-sm">
+                        <CardHeader>
+                          <CardTitle>No shops registered</CardTitle>
+                          <CardDescription>
+                            Register your first print shop to start accepting orders
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col items-center py-8">
+                          <div className="p-5 bg-muted rounded-full mb-5">
+                            <Printer size={48} className="text-muted-foreground" />
+                          </div>
+                          <Button className="flex items-center gap-2" onClick={() => setShowNewShopForm(true)}>
+                            <Plus size={16} />
+                            Register New Shop
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </Card>
+                </TabsContent>
+                
+                <TabsContent value="orders">
+                  <ShopOrdersTab onOrderCompleted={refreshStats} />
+                </TabsContent>
+                
+                <TabsContent value="pricing">
+                  <ShopPricingTab />
+                </TabsContent>
+              </Tabs>
+            )}
           </div>
         </div>
       </div>

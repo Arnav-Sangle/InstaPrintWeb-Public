@@ -1,201 +1,134 @@
 
-import React from 'react';
-import { Link } from 'react-router-dom';
-import Navbar from '@/components/Navbar';
-import UserRedirect from '@/components/UserRedirect';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import UserRedirect from '@/components/UserRedirect';
+import Navbar from '@/components/Navbar';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, FileText, MapPin, CreditCard, Clock, CheckCircle, Plus } from 'lucide-react';
+import { FileUp, FileText, ShoppingBag } from 'lucide-react';
+import FileCheck from '@/components/ui/FileCheck';
+import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import ActiveOrders from '@/components/ActiveOrders';
+import OrderHistory from '@/components/OrderHistory';
 
 const CustomerDashboard = () => {
   const { user } = useAuth();
+  const [stats, setStats] = useState({
+    activeOrders: 0,
+    completedOrders: 0,
+  });
   
-  // Mock printing orders (in a real app, these would come from an API)
-  const orders = [
-    {
-      id: 'ORD-001',
-      status: 'ready',
-      shop: 'Quick Print Store',
-      date: '2023-10-15',
-      totalPages: 12,
-      price: '$4.80',
-      files: ['document.pdf']
-    },
-    {
-      id: 'ORD-002',
-      status: 'processing',
-      shop: 'City Print Center',
-      date: '2023-10-18',
-      totalPages: 35,
-      price: '$12.25',
-      files: ['presentation.pptx', 'notes.pdf']
+  useEffect(() => {
+    if (user) {
+      fetchDashboardStats();
     }
-  ];
-  
-  const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    processing: 'bg-blue-100 text-blue-800',
-    ready: 'bg-green-100 text-green-800',
-    completed: 'bg-gray-100 text-gray-800'
+  }, [user]);
+
+  const fetchDashboardStats = async () => {
+    if (!user) return;
+    
+    try {
+      // Get active orders (pending)
+      const { data: activeOrders, error: activeError } = await supabase
+        .from('print_jobs')
+        .select('*')
+        .eq('customer_id', user.id)
+        .eq('status', 'pending');
+      
+      if (activeError) throw activeError;
+      
+      // Get completed orders (completed or cancelled)
+      const { data: completedOrders, error: completedError } = await supabase
+        .from('print_jobs')
+        .select('*')
+        .eq('customer_id', user.id)
+        .in('status', ['completed', 'cancelled']);
+      
+      if (completedError) throw completedError;
+      
+      setStats({
+        activeOrders: activeOrders.length,
+        completedOrders: completedOrders.length,
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    }
   };
   
   return (
     <UserRedirect requiredRole="customer">
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen dashboard-gradient">
         <Navbar />
         
-        <div className="container px-4 md:px-6 pt-28 pb-16">
-          <div className="max-w-6xl mx-auto">
-            <header className="mb-10">
-              <h1 className="text-3xl font-bold tracking-tight animate-fade-in">Welcome, {user?.name}</h1>
-              <p className="text-muted-foreground animate-fade-in" style={{ animationDelay: '0.1s' }}>
-                Manage your printing orders and create new print requests
-              </p>
-            </header>
-            
-            <div className="mb-12 glass rounded-xl p-6 animate-scale-in">
-              <h2 className="text-2xl font-semibold mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <Button variant="outline" className="h-auto py-6 flex flex-col items-center justify-center gap-2 bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/30">
-                  <Upload className="h-6 w-6" />
-                  <span>New Print Job</span>
-                </Button>
-                <Button variant="outline" className="h-auto py-6 flex flex-col items-center justify-center gap-2 bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/30">
-                  <MapPin className="h-6 w-6" />
-                  <span>Find Print Shops</span>
-                </Button>
-                <Button variant="outline" className="h-auto py-6 flex flex-col items-center justify-center gap-2 bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/30">
-                  <Clock className="h-6 w-6" />
-                  <span>Track Orders</span>
-                </Button>
-                <Button variant="outline" className="h-auto py-6 flex flex-col items-center justify-center gap-2 bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/30">
-                  <CreditCard className="h-6 w-6" />
-                  <span>Payment History</span>
-                </Button>
+        <div className="container px-4 md:px-6 pt-28 pb-16 md:pt-36 md:pb-20">
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="animate-on-load">
+                <h1 className="text-3xl font-bold tracking-tight">Customer Dashboard</h1>
+                <p className="text-muted-foreground mt-1">
+                  Welcome back, {user?.name || 'Customer'}
+                </p>
               </div>
+              
+              <Button className="flex items-center gap-2 shadow-sm animate-on-load" asChild>
+                <Link to="/print-order">
+                  <FileUp size={16} />
+                  New Print Job
+                </Link>
+              </Button>
             </div>
             
-            <Tabs defaultValue="orders">
-              <TabsList className="mb-6">
-                <TabsTrigger value="orders">My Orders</TabsTrigger>
-                <TabsTrigger value="saved">Saved Documents</TabsTrigger>
-                <TabsTrigger value="favorite">Favorite Shops</TabsTrigger>
+            {/* Dashboard stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-on-load">
+              <Card className="bg-card shadow-sm card-hover">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Active Orders</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <div className="mr-4 p-2 bg-primary/10 rounded-full">
+                      <ShoppingBag className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{stats.activeOrders}</div>
+                      <p className="text-xs text-muted-foreground">Current print jobs</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-card shadow-sm card-hover">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <div className="mr-4 p-2 bg-primary/10 rounded-full">
+                      <FileCheck className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{stats.completedOrders}</div>
+                      <p className="text-xs text-muted-foreground">Finished orders</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            
+            <Tabs defaultValue="active-orders" className="w-full animate-on-load">
+              <TabsList className="grid grid-cols-2 max-w-md mb-8">
+                <TabsTrigger value="active-orders">Active Orders</TabsTrigger>
+                <TabsTrigger value="order-history">Order History</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="orders" className="animate-fade-in">
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-semibold">Recent Orders</h2>
-                    <Button variant="outline" size="sm">
-                      View All
-                    </Button>
-                  </div>
-                  
-                  {orders.length > 0 ? (
-                    <div className="grid gap-6">
-                      {orders.map((order) => (
-                        <Card key={order.id} className="overflow-hidden glass">
-                          <CardHeader className="bg-white/30 dark:bg-black/10">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <CardTitle className="text-xl">Order #{order.id}</CardTitle>
-                                <CardDescription>{order.shop} • {order.date}</CardDescription>
-                              </div>
-                              <div className={`px-3 py-1 rounded-full text-sm ${statusColors[order.status as keyof typeof statusColors]}`}>
-                                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                              </div>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="pt-6">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground mb-1">Files</p>
-                                <div className="space-y-2">
-                                  {order.files.map((file, index) => (
-                                    <div key={index} className="flex items-center">
-                                      <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
-                                      <span className="text-sm">{file}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-medium text-muted-foreground mb-1">Details</p>
-                                <p className="text-sm">{order.totalPages} pages</p>
-                                <p className="text-sm font-medium mt-1">{order.price}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                          <CardFooter className="flex justify-between border-t bg-white/30 dark:bg-black/10">
-                            <Button variant="ghost" size="sm">
-                              View Details
-                            </Button>
-                            {order.status === 'ready' && (
-                              <Button size="sm">
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Confirm Pickup
-                              </Button>
-                            )}
-                          </CardFooter>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : (
-                    <Card className="glass text-center py-12">
-                      <CardContent>
-                        <div className="mx-auto rounded-full bg-secondary w-12 h-12 flex items-center justify-center mb-4">
-                          <FileText className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                        <h3 className="text-xl font-medium mb-2">No orders yet</h3>
-                        <p className="text-muted-foreground mb-6">
-                          You haven't placed any print orders yet. Start by creating a new print job.
-                        </p>
-                        <Button>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Create Print Job
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
+              <TabsContent value="active-orders" className="space-y-6">
+                <ActiveOrders />
               </TabsContent>
               
-              <TabsContent value="saved" className="animate-fade-in">
-                <Card className="glass text-center py-12">
-                  <CardContent>
-                    <div className="mx-auto rounded-full bg-secondary w-12 h-12 flex items-center justify-center mb-4">
-                      <FileText className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <h3 className="text-xl font-medium mb-2">No saved documents</h3>
-                    <p className="text-muted-foreground mb-6">
-                      You haven't saved any documents yet. Upload documents and save them for future use.
-                    </p>
-                    <Button>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Document
-                    </Button>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="favorite" className="animate-fade-in">
-                <Card className="glass text-center py-12">
-                  <CardContent>
-                    <div className="mx-auto rounded-full bg-secondary w-12 h-12 flex items-center justify-center mb-4">
-                      <MapPin className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <h3 className="text-xl font-medium mb-2">No favorite shops</h3>
-                    <p className="text-muted-foreground mb-6">
-                      You haven't added any print shops to your favorites yet. Browse nearby shops and add them to your favorites.
-                    </p>
-                    <Button>
-                      <MapPin className="h-4 w-4 mr-2" />
-                      Find Print Shops
-                    </Button>
-                  </CardContent>
-                </Card>
+              <TabsContent value="order-history">
+                <OrderHistory />
               </TabsContent>
             </Tabs>
           </div>

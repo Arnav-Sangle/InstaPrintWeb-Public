@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const AuthForm: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -18,6 +19,7 @@ const AuthForm: React.FC = () => {
   const [name, setName] = useState('');
   const [role, setRole] = useState<UserRole>('customer');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
   
   const { login, signup } = useAuth();
   const navigate = useNavigate();
@@ -28,35 +30,19 @@ const AuthForm: React.FC = () => {
     
     try {
       if (isLogin) {
-        await login(email, password, role);
+        await login(email, password);
         toast.success('Successfully logged in');
+        
+        // Redirect based on role is handled by UserRedirect component
       } else {
         await signup(email, password, name, role);
-        toast.success('Account created successfully');
+        setShowVerificationMessage(true);
+        // Don't redirect after signup - need email verification first
       }
-      
-      // Redirect based on role
-      redirectBasedOnRole(role);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Authentication failed');
+      // Error is already handled in the auth context
     } finally {
       setIsSubmitting(false);
-    }
-  };
-  
-  const redirectBasedOnRole = (role: UserRole) => {
-    switch (role) {
-      case 'customer':
-        navigate('/customer-dashboard');
-        break;
-      case 'shopkeeper':
-        navigate('/shopkeeper-dashboard');
-        break;
-      case 'admin':
-        navigate('/admin-dashboard');
-        break;
-      default:
-        navigate('/');
     }
   };
   
@@ -81,6 +67,15 @@ const AuthForm: React.FC = () => {
         </CardHeader>
         
         <CardContent>
+          {showVerificationMessage && (
+            <Alert className="mb-4 bg-primary/10 border-primary/30">
+              <AlertDescription>
+                Please check your email and click the verification link to complete your registration.
+                You will not be able to login until your email is verified.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div className="space-y-2">
@@ -92,7 +87,7 @@ const AuthForm: React.FC = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || showVerificationMessage}
                   className="bg-white/50 dark:bg-black/20"
                 />
               </div>
@@ -107,7 +102,7 @@ const AuthForm: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={isSubmitting}
+                disabled={isSubmitting || showVerificationMessage}
                 className="bg-white/50 dark:bg-black/20"
               />
             </div>
@@ -121,39 +116,43 @@ const AuthForm: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={isSubmitting}
+                disabled={isSubmitting || showVerificationMessage}
                 className="bg-white/50 dark:bg-black/20"
               />
             </div>
             
-            <div className="space-y-3 pt-2">
-              <Label>I am a:</Label>
-              <RadioGroup value={role} onValueChange={(value: UserRole) => setRole(value)} className="grid grid-cols-1 gap-3">
-                <div className="flex items-center space-x-2 rounded-md border p-3 bg-white/50 dark:bg-black/20">
-                  <RadioGroupItem value="customer" id="customer" />
-                  <Label htmlFor="customer" className="flex-1 cursor-pointer">Customer looking to print</Label>
-                </div>
-                <div className="flex items-center space-x-2 rounded-md border p-3 bg-white/50 dark:bg-black/20">
-                  <RadioGroupItem value="shopkeeper" id="shopkeeper" />
-                  <Label htmlFor="shopkeeper" className="flex-1 cursor-pointer">Print Shop Owner</Label>
-                </div>
-                <div className="flex items-center space-x-2 rounded-md border p-3 bg-white/50 dark:bg-black/20">
-                  <RadioGroupItem value="admin" id="admin" />
-                  <Label htmlFor="admin" className="flex-1 cursor-pointer">Administrator</Label>
-                </div>
-              </RadioGroup>
-            </div>
+            {!isLogin && (
+              <div className="space-y-3 pt-2">
+                <Label>I am a:</Label>
+                <RadioGroup value={role} onValueChange={(value: UserRole) => setRole(value)} className="grid grid-cols-1 gap-3">
+                  <div className="flex items-center space-x-2 rounded-md border p-3 bg-white/50 dark:bg-black/20">
+                    <RadioGroupItem value="customer" id="customer" disabled={isSubmitting || showVerificationMessage} />
+                    <Label htmlFor="customer" className="flex-1 cursor-pointer">Customer looking to print</Label>
+                  </div>
+                  <div className="flex items-center space-x-2 rounded-md border p-3 bg-white/50 dark:bg-black/20">
+                    <RadioGroupItem value="shopkeeper" id="shopkeeper" disabled={isSubmitting || showVerificationMessage} />
+                    <Label htmlFor="shopkeeper" className="flex-1 cursor-pointer">Print Shop Owner</Label>
+                  </div>
+                  {/* <div className="flex items-center space-x-2 rounded-md border p-3 bg-white/50 dark:bg-black/20">
+                    <RadioGroupItem value="admin" id="admin" disabled={isSubmitting || showVerificationMessage} />
+                    <Label htmlFor="admin" className="flex-1 cursor-pointer">Administrator</Label>
+                  </div> */}
+                </RadioGroup>
+              </div>
+            )}
             
-            <Button type="submit" className="w-full mt-6" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isLogin ? 'Signing in...' : 'Creating account...'}
-                </>
-              ) : (
-                isLogin ? 'Sign In' : 'Create Account'
-              )}
-            </Button>
+            {!showVerificationMessage && (
+              <Button type="submit" className="w-full mt-6" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isLogin ? 'Signing in...' : 'Creating account...'}
+                  </>
+                ) : (
+                  isLogin ? 'Sign In' : 'Create Account'
+                )}
+              </Button>
+            )}
           </form>
         </CardContent>
         
@@ -162,8 +161,12 @@ const AuthForm: React.FC = () => {
             {isLogin ? "Don't have an account?" : "Already have an account?"}
             <Button 
               variant="link" 
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setShowVerificationMessage(false);
+              }}
               className="p-0 h-auto ml-1"
+              disabled={isSubmitting}
             >
               {isLogin ? 'Sign up' : 'Sign in'}
             </Button>
