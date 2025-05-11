@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -64,7 +63,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
     // Create script tag to load Google Maps
     const googleMapScript = document.createElement('script');
 
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const apiKey = "AIzaSyAt-mYqJvqHDLKdlN3cZ_3HDN5IJ8J-D4U";
 
     if (!apiKey) {
       console.error('Google Maps API key is missing');
@@ -335,65 +334,40 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ initialLocation, onSe
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <Input
-            placeholder="Search for address..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          />
-        </div>
-        <Button type="button" onClick={handleSearch}>
-          <Search className="h-4 w-4 mr-2" />
-          Search
-        </Button>
-        <Button type="button" variant="outline" onClick={handleGetCurrentLocation}>
-          <MapPin className="h-4 w-4 mr-2" />
-          Current Location
-        </Button>
-      </div>
-      
-      <div 
-        ref={mapRef} 
-        className="h-[400px] w-full rounded-md border border-gray-200"
-      ></div>
-      
-      {selectedLocation && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="latitude">Latitude</Label>
-              <Input 
-                id="latitude" 
-                value={selectedLocation.lat.toFixed(6)} 
-                readOnly 
-              />
-            </div>
-            <div>
-              <Label htmlFor="longitude">Longitude</Label>
-              <Input 
-                id="longitude" 
-                value={selectedLocation.lng.toFixed(6)} 
-                readOnly 
-              />
-            </div>
+    <Card className="overflow-hidden">
+      <CardContent className="p-2 sm:p-4">
+        <div className="map-container">
+          <div className="map-search-bar">
+            <Input
+              type="text"
+              placeholder="Search location..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="text-sm"
+            />
+            <Button onClick={handleSearch} className="text-sm h-8 sm:h-10">
+              <Search className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              Search
+            </Button>
+            <Button onClick={handleGetCurrentLocation} className="text-sm h-8 sm:h-10">
+              <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              Current
+            </Button>
           </div>
-          
+          <div 
+            ref={mapRef} 
+            style={{ height: '300px', width: '100%' }} 
+            className="rounded-lg border border-border"
+          />
           {selectedAddress && (
-            <div>
-              <Label htmlFor="address">Selected Address</Label>
-              <Input 
-                id="address" 
-                value={selectedAddress} 
-                readOnly 
-              />
+            <div className="mt-3 space-y-1">
+              <Label className="text-sm">Selected Location:</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground break-words">{selectedAddress}</p>
             </div>
           )}
         </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

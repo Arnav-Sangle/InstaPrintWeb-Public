@@ -16,34 +16,59 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Database } from '@/integrations/supabase/types';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, RealtimeChannel } from '@supabase/supabase-js';
+import PrintJobViewer from './PrintJobViewer';
+import { PrintSpecs, PaperSize, ColorMode } from './PrintSpecifications';
 
-type Profile = Database['public']['Tables']['profiles']['Row'];
-type PrintJobRow = Database['public']['Tables']['print_jobs']['Row'];
+type DatabasePrintJob = Database['public']['Tables']['print_jobs']['Row'] & {
+  page_count?: number;
+};
 
-interface DatabasePrintJob extends PrintJobRow {}
+type DatabaseProfile = Database['public']['Tables']['profiles']['Row'];
+type DatabaseShop = Database['public']['Tables']['shops']['Row'];
+
+type PrintJobWithProfile = DatabasePrintJob & {
+  profiles?: Pick<DatabaseProfile, 'name' | 'email'> | null;
+};
+
+type PrintJob = {
+  id: string;
+  customer_id: string;
+  shop_id: string;
+  file_path: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  price: number | null;
+  customer_name: string;
+  customer_email: string;
+  specifications: PrintSpecs;
+};
 
 interface User {
   id: string;
   email: string;
 }
 
-interface PrintJob extends DatabasePrintJob {
-  customer_name: string;
-  customer_email: string;
+interface Shop {
+  id: string;
+  name: string;
+  address: string;
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
 }
-
-interface PrintJobWithProfile extends DatabasePrintJob {
-  profiles: Profile | null;
-}
-
-type PrintJobResponse = Omit<PrintJob, 'customer_name' | 'customer_email'> & {
-  profiles: Profile | null;
-};
 
 interface ShopOrdersTabProps {
   shopId?: string;
   onOrderCompleted?: () => void;
+}
+
+interface SupabaseError {
+  message: string;
+  details: string;
+  hint: string;
+  code: string;
 }
 
 const statusStyles = {
@@ -64,7 +89,7 @@ const statusStyles = {
   },
 };
 
-const ShopOrdersTab = ({ shopId, onOrderCompleted }: ShopOrdersTabProps) => {
+const ShopOrdersTab: React.FC<ShopOrdersTabProps> = ({ shopId: initialShopId, onOrderCompleted }) => {
   const { user } = useAuth();
   const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,12 +97,58 @@ const ShopOrdersTab = ({ shopId, onOrderCompleted }: ShopOrdersTabProps) => {
   const [viewingDocument, setViewingDocument] = useState<string | null>(null);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null);
-  const [shops, setShops] = useState<any[]>([]);
-  const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
+  const [shops, setShops] = useState<DatabaseShop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(initialShopId || null);
   const [error, setError] = useState<string | null>(null);
   const [lastFetchTime, setLastFetchTime] = useState<number>(0);
 
-  const fetchPrintJobs = async (currentShopId: string, force: boolean = false) => {
+  const handleError = (error: unknown) => {
+    console.error('Error:', error);
+    if (error instanceof Error) {
+      setError(error.message);
+    } else if (typeof error === 'object' && error !== null && 'message' in error) {
+      setError((error as SupabaseError).message);
+    } else {
+      setError('An unexpected error occurred');
+    }
+  };
+
+  const fetchUserShops = async (force = false) => {
+    if (!user) return;
+
+    const now = Date.now();
+    if (!force && now - lastFetchTime < 5000) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('shops')
+        .select('*')
+        .eq('owner_id', user.id);
+        
+      if (error) {
+        throw error;
+      }
+      
+      if (data && data.length > 0) {
+        setShops(data);
+        if (!selectedShopId) {
+          setSelectedShopId(initialShopId || data[0].id);
+        }
+        setError(null);
+        setLastFetchTime(now);
+      }
+    } catch (error: unknown) {
+      handleError(error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPrintJobs = async (currentShopId: string, force = false) => {
     if (!user || !currentShopId) return;
 
     const now = Date.now();
@@ -98,9 +169,7 @@ const ShopOrdersTab = ({ shopId, onOrderCompleted }: ShopOrdersTabProps) => {
         .order('created_at', { ascending: false });
       
       if (jobsError) {
-        console.error('Error fetching jobs:', jobsError);
-        setError('Failed to load orders');
-        return;
+        throw jobsError;
       }
 
       if (!jobsData || jobsData.length === 0) {
@@ -110,62 +179,33 @@ const ShopOrdersTab = ({ shopId, onOrderCompleted }: ShopOrdersTabProps) => {
         return;
       }
 
-      const jobsWithCustomerDetails = jobsData.map((job: any) => {
-        const customerProfile = job.profiles;
-        const customerName = customerProfile?.name || 'Unknown Customer';
-        const customerEmail = customerProfile?.email || 'Unknown Email';
-
-        return {
-          ...job,
-          customer_name: customerName,
-          customer_email: customerEmail
-        } as PrintJob;
-      });
+      const jobsWithCustomerDetails = (jobsData as PrintJobWithProfile[]).map(job => ({
+        id: job.id,
+        customer_id: job.customer_id,
+        shop_id: job.shop_id,
+        file_path: job.file_path,
+        status: job.status,
+        created_at: job.created_at,
+        updated_at: job.updated_at,
+        price: job.price,
+        customer_name: job.profiles?.name || 'Unknown Customer',
+        customer_email: job.profiles?.email || 'Unknown Email',
+        specifications: {
+          paperSize: job.paper_size as PaperSize,
+          colorMode: job.color_mode as ColorMode,
+          copies: job.copies,
+          doubleSided: job.double_sided,
+          stapling: job.stapling,
+          pageCount: job.page_count ?? 1,
+          pricePerPage: null
+        }
+      }));
 
       setPrintJobs(jobsWithCustomerDetails);
       setError(null);
       setLastFetchTime(now);
-    } catch (error: any) {
-      console.error('Error fetching print jobs:', error);
-      setError('An unexpected error occurred');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUserShops = async (force: boolean = false) => {
-    if (!user) return;
-
-    const now = Date.now();
-    if (!force && now - lastFetchTime < 5000) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('shops')
-        .select('*')
-        .eq('owner_id', user.id);
-        
-      if (error) {
-        console.error('Error fetching shops:', error);
-        setError('Failed to load shops');
-        return;
-      }
-      
-      if (data && data.length > 0) {
-        setShops(data);
-        if (!selectedShopId) {
-          setSelectedShopId(shopId || data[0].id);
-        }
-        setError(null);
-        setLastFetchTime(now);
-      }
-    } catch (error) {
-      console.error('Error in fetchUserShops:', error);
-      setError('Failed to load shops');
+    } catch (error: unknown) {
+      handleError(error);
       throw error;
     } finally {
       setLoading(false);
@@ -210,11 +250,11 @@ const ShopOrdersTab = ({ shopId, onOrderCompleted }: ShopOrdersTabProps) => {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, shopId]);
+  }, [user, initialShopId]);
 
   useEffect(() => {
     let mounted = true;
-    let channel: any;
+    let channel: RealtimeChannel;
     let retryTimeout: NodeJS.Timeout;
     let retryCount = 0;
     const MAX_RETRIES = 3;
@@ -302,149 +342,53 @@ const ShopOrdersTab = ({ shopId, onOrderCompleted }: ShopOrdersTabProps) => {
       sendOrderCompletedEmail(jobId);
 
       toast.success('Order marked as completed');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error completing order:', error);
-      toast.error(error.message || 'Failed to complete order');
+      if (error instanceof Error) {
+        toast.error(error.message || 'Failed to complete order');
+      } else {
+        toast.error('Failed to complete order');
+      }
     }
   };
 
   const sendOrderCompletedEmail = async (orderId: string) => {
     try {
       console.log("inside try mail")
-      // const { data, error } = await supabase.functions.invoke('send-order-completed-email', {
-      //   body: { orderId }
-      // });
+      const { data, error } = await supabase.functions.invoke('send-order-completed-email', {
+        body: { orderId }
+      });
 
-      // if (error) {
-      //   console.error('Error sending order completed email:', error);
-      //   toast.error('Order marked as completed, but failed to send notification email');
-      // } else {
-      //   console.log('Order completed email sent:', data);
-      //   toast.success('Order completion notification email sent to customer');
-      // }
-
-      //Arnav supa
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-
-      // const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      // const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-
-      
-      if (!supabaseUrl || !supabaseServiceKey) {
-        throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required");
+      if (error) {
+        console.error('Error sending order completed email:', error);
+        toast.error('Order marked as completed, but failed to send notification email');
+      } else {
+        console.log('Order completed email sent:', data);
+        toast.success('Order completion notification email sent to customer');
       }
-      console.log("service key ok")
-
-
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
-      console.log("email client created")
-
-
-      // Get the order details along with customer information
-      const { data: orderData, error: orderError } = await supabase
-        .from("print_jobs")
-        .select(`
-          *,
-          profiles:customer_id(name, email)
-        `)
-        .eq("id", orderId)
-        .single();
-
-      if (orderError || !orderData) {
-        throw new Error(orderError?.message || "Order not found");
-      }
-      console.log("Got orders")
-
-      // Get shop details
-      const { data: shopData, error: shopError } = await supabase
-        .from("shops")
-        .select("name, address")
-        .eq("id", orderData.shop_id)
-        .single();
-
-      if (shopError || !shopData) {
-        throw new Error(shopError?.message || "Shop not found");
-      }
-      console.log("Got shops")
-
-      const customerEmail = orderData.profiles?.email;
-      const customerName = orderData.profiles?.name || "Customer";
-      if (!customerEmail) {
-        throw new Error("Customer email not found");
-      }
-      console.log("customerEmail", customerEmail)
-      
-      console.log("before genrate mail link")
-      const { data, error } = await supabase.auth.admin.generateLink({
-        type: 'magiclink',
-        email: customerEmail
-      })
-      console.log("after genrate mail link")
-
-      console.log("email data",data)
-      console.log("email error",error)
-
-    // // Send email using Supabase's email service
-    // const { error: emailError } = await supabase.auth.admin.generateLink({
-    //   type: 'magiclink',
-    //   email: customerEmail,
-    //   options: {
-    //     data: {
-    //       orderId: orderData.id,
-    //       shopName: shopData.name,
-    //       orderStatus: 'completed',
-    //       // Additional data for the email template
-    //       customTemplate: {
-    //         subject: "InstaPrint: Order Completed",
-    //         body: `<h1>InstaPrint</h1>
-    //                 <h2>Order Completed</h2>
-    //                 <p><b>Please proceed to collect</b> your Completed Order from the shop.</p>
-    //                 <p>View your Completed Order on our website <a href="${supabaseUrl}">InstaPrint</a></p>
-    //                 <p>Your order details:</p>
-    //                 <ul>
-    //                   <li>Order ID: ${orderData.id.substring(0, 8)}</li>
-    //                   <li>Shop: ${shopData.name}</li>
-    //                   <li>Location: ${shopData.address}</li>
-    //                   <li>Paper Size: ${orderData.paper_size}</li>
-    //                   <li>Copies: ${orderData.copies}</li>
-    //                   <li>Color Mode: ${orderData.color_mode === 'bw' ? 'Black & White' : 'Color'}</li>
-    //                   <li>Double-sided: ${orderData.double_sided ? 'Yes' : 'No'}</li>
-    //                   <li>Stapling: ${orderData.stapling ? 'Yes' : 'No'}</li>
-    //                   <li>Price: Rs. ${orderData.price?.toFixed(2) || '0.00'}</li>
-    //                 </ul>
-    //                 <p>Thank you for using InstaPrint!</p>`
-    //       }
-    //     }
-    //   }
-    // });
-
-    // if (emailError) {
-    //   throw new Error(emailError.message);
-    // }
-
-    // console.log(`Email sent to ${customerEmail} for order ${orderId}`);
-
-
     } catch (error) {
       console.error('Error sending order completed email:', error);
       toast.error('Order marked as completed, but failed to send notification email');
     }
   };
 
-  const viewDocument = async (filePath: string) => {
+  const handleViewDocument = async (job: PrintJob) => {
     try {
-      setViewingDocument(filePath);
-      
-      const { data } = supabase.storage
+      // Get signed URL for the document
+      const { data: { signedUrl }, error } = await supabase
+        .storage
         .from('documents')
-        .getPublicUrl(filePath);
-      
-      setDocumentUrl(data.publicUrl);
+        .createSignedUrl(job.file_path, 3600); // 1 hour expiry
+
+      if (error) {
+        throw error;
+      }
+
+      setDocumentUrl(signedUrl);
+      setViewingDocument(job.id);
     } catch (error) {
       console.error('Error getting document URL:', error);
-      toast.error('Failed to load the document');
-      setViewingDocument(null);
+      toast.error('Failed to load document preview');
     }
   };
 
@@ -662,27 +606,30 @@ const ShopOrdersTab = ({ shopId, onOrderCompleted }: ShopOrdersTabProps) => {
                       
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-y-2 text-sm">
                           <div>
-                            <span className="text-muted-foreground">Paper:</span> {job.paper_size}
+                            <span className="text-muted-foreground">Paper:</span> {job.specifications.paperSize}
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Color:</span> {job.color_mode === 'bw' ? 'B&W' : 'Color'}
+                            <span className="text-muted-foreground">Color:</span> {job.specifications.colorMode === 'bw' ? 'B&W' : 'Color'}
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Copies:</span> {job.copies}
+                            <span className="text-muted-foreground">Copies:</span> {job.specifications.copies}
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Double-sided:</span> {job.double_sided ? 'Yes' : 'No'}
+                            <span className="text-muted-foreground">Double-sided:</span> {job.specifications.doubleSided ? 'Yes' : 'No'}
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Stapling:</span> {job.stapling ? 'Yes' : 'No'}
+                            <span className="text-muted-foreground">Stapling:</span> {job.specifications.stapling ? 'Yes' : 'No'}
                           </div>
+                          {/* <div>
+                            <span className="text-muted-foreground">Price:</span> <span className="flex items-center"><LucideIndianRupee size={14} className="mr-0.5" />{job.price?.toFixed(2)}</span>
+                          </div> */}
                         </div>
                         
                         <div className="pt-2 flex flex-wrap gap-2">
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => viewDocument(job.file_path)}
+                            onClick={() => handleViewDocument(job)}
                           >
                             <Eye className="mr-2 h-4 w-4" />
                             View Document
@@ -712,22 +659,57 @@ const ShopOrdersTab = ({ shopId, onOrderCompleted }: ShopOrdersTabProps) => {
         </CardContent>
       </Card>
 
-      <Dialog open={!!viewingDocument} onOpenChange={() => setViewingDocument(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Document Preview</DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto">
-            {documentUrl && (
-              <iframe 
-                src={documentUrl} 
-                className="w-full h-full min-h-[70vh]" 
-                title="Document Preview"
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {viewingDocument && documentUrl && (
+        <PrintJobViewer
+          documentUrl={documentUrl}
+          printSpecs={printJobs.find(job => job.id === viewingDocument)?.specifications || {
+            paperSize: 'A4' as const,
+            colorMode: 'bw' as const,
+            copies: 1,
+            doubleSided: false,
+            stapling: false,
+            pageCount: printJobs.find(job => job.id === viewingDocument)?.specifications.pageCount ?? 1,
+            pricePerPage: null
+          }}
+          onClose={() => {
+            setViewingDocument(null);
+            setDocumentUrl(null);
+          }}
+          onAccept={async () => {
+            if (!viewingDocument) return;
+            
+            try {
+              const { error } = await supabase
+                .from('print_jobs')
+                .update({ status: 'completed' })
+                .eq('id', viewingDocument);
+                
+              if (error) throw error;
+              
+              // Send order completed email notification
+              await sendOrderCompletedEmail(viewingDocument);
+              
+              toast.success('Order marked as completed');
+              setViewingDocument(null);
+              setDocumentUrl(null);
+              
+              // Refresh orders list
+              if (selectedShopId) {
+                fetchPrintJobs(selectedShopId, true);
+              }
+              
+              // Notify parent component
+              if (onOrderCompleted) {
+                onOrderCompleted();
+              }
+            } catch (error) {
+              console.error('Error completing print job:', error);
+              toast.error('Failed to complete print job');
+            }
+          }}
+          showActions={true}
+        />
+      )}
     </>
   );
 };

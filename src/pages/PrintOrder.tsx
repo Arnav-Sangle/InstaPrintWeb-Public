@@ -283,7 +283,8 @@ const PrintOrder = () => {
                 </div>
               ) : (
                 <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-                  <TabsList className="grid grid-cols-4 mb-8">
+                  {/* <TabsList className="grid grid-cols-4 mb-8"> */}
+                  <TabsList className="grid grid-cols-2 sm:grid-cols-4 mb-8 gap-2 sm:gap-0">
                     <TabsTrigger value="upload" disabled={isChangingTab}>
                       1. Upload
                     </TabsTrigger>
@@ -334,17 +335,28 @@ const PrintOrder = () => {
                   </TabsContent>
                   
                   <TabsContent value="specs">
-                    {uploadedFile && (
-                      <div className="mb-6 flex justify-between items-center">
-                        <div>
-                          <p className="font-medium">Uploaded document: {uploadedFile.name}</p>
-                          <p className="text-sm text-muted-foreground">Pages: {uploadedFile.pageCount || '1'}</p>
+                    <div className="mb-6 flex flex-col gap-2">
+                      {uploadedFile && (
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">Uploaded document: {uploadedFile.name}</p>
+                            <p className="text-sm text-muted-foreground">Pages: {uploadedFile.pageCount || '1'}</p>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={handleViewDocument}>
+                            View Document
+                          </Button>
                         </div>
-                        <Button variant="outline" size="sm" onClick={handleViewDocument}>
-                          View Document
-                        </Button>
-                      </div>
-                    )}
+                      )}
+                      
+                      {selectedShop && (
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">Selected shop: {selectedShop.name}</p>
+                            <p className="text-sm text-muted-foreground">{selectedShop.address}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     
                     <PrintSpecifications 
                       shopId={selectedShop?.id || null}

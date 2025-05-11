@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,27 +88,10 @@ const PaymentCalculator = ({
   const calculateTotalPrice = () => {
     if (!printSpecs.pricePerPage) return 0;
     
-    // Base calculation - price per page × total pages × number of copies
-    let totalPages = printSpecs.pageCount;
+    const totalPages = printSpecs.pageCount * printSpecs.copies;
+    const effectivePages = printSpecs.doubleSided ? Math.ceil(totalPages / 2) : totalPages;
     
-    // If double-sided, we need to adjust the effective page count for pricing
-    // (but we don't reduce the actual number of pages that need to be printed)
-    let effectivePages = totalPages;
-    if (printSpecs.doubleSided && totalPages > 1) {
-      // // For double-sided, we calculate ceiling of pages/2 for sheets needed, round off incase of decimal to ceiling
-      
-      // const sheetsNeeded = Math.ceil(totalPages / 2);
-      // effectivePages = sheetsNeeded;
-    }
-    
-    // Calculate base price using the correct price per page from the shop's pricing
-    const basePrice = printSpecs.pricePerPage * effectivePages * printSpecs.copies;
-    
-    // Apply stapling fee if enabled (Rs 5.00 per document)
-    const staplingFee = printSpecs.stapling ? 5.00 * printSpecs.copies : 0;
-    
-    // Return the total, rounded to 2 decimal places
-    return Math.round((basePrice + staplingFee) * 100) / 100;
+    return effectivePages * printSpecs.pricePerPage;
   };
 
   const handleCreateOrder = async () => {
@@ -136,12 +118,13 @@ const PaymentCalculator = ({
           file_path: documentPath,
           paper_size: printSpecs.paperSize,
           color_mode: printSpecs.colorMode,
+          page_count: printSpecs.pageCount,
           copies: printSpecs.copies,
           double_sided: printSpecs.doubleSided,
           stapling: printSpecs.stapling,
           price: totalPrice,
           status: 'pending',
-          payment_status: 'pending'
+          payment_status: 'pending',
         })
         .select('id');
         
@@ -154,9 +137,13 @@ const PaymentCalculator = ({
         setOrderId(data[0].id);
         toast.success('Order created! Please complete payment.');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating order:', error);
-      toast.error(error.message || 'Failed to create order');
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to create order');
+      }
     } finally {
       setLoading(false);
     }
@@ -206,8 +193,6 @@ const PaymentCalculator = ({
     } finally {
       setPaymentVerifying(false);
     }
-
-
   };
   
   const handlePlaceOrder = async () => {
@@ -215,7 +200,7 @@ const PaymentCalculator = ({
       // If we already have an order ID, it means payment is complete
       if (orderCompleted) {
         onOrderPlaced();
-      } else if (paymentMethod === 'upi') {
+      } else {
         await handleMarkAsPaid();
       }
     } else {
@@ -246,10 +231,10 @@ const PaymentCalculator = ({
   };
 
   useEffect(() => {
-    if (paymentMethod === 'upi' && shopUpiId && orderId) {
+    if (shopUpiId && orderId) {
       generateQrCode();
     }
-  }, [paymentMethod, shopUpiId, orderId, totalPrice]);
+  }, [shopUpiId, orderId, totalPrice]);
 
   return (
     <Card className="bg-card shadow-sm">

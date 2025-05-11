@@ -209,8 +209,9 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onFileUploaded }) => {
     <Card className="bg-card shadow-sm">
       <CardContent className="p-6">
         <div className="space-y-6">
+          
           {!uploadedFileData ? (
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 transition-colors hover:border-primary/50 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+            <div className="upload-area flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-2 sm:p-4 transition-colors hover:border-primary/50 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
               <input 
                 type="file" 
                 ref={fileInputRef}
@@ -222,8 +223,8 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onFileUploaded }) => {
               
               {!file ? (
                 <>
-                  <Upload className="h-10 w-10 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground text-center">
+                  <Upload className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground mb-1 sm:mb-2" />
+                  <p className="text-[0.625rem] sm:text-sm text-muted-foreground text-center">
                     Click to upload or drag and drop<br />
                     PDF, DOCX, JPEG or PNG (max. 10MB)
                   </p>
@@ -231,38 +232,38 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onFileUploaded }) => {
               ) : (
                 <div className="flex flex-col items-center w-full">
                   <div className="flex items-center justify-between w-full">
-                    <Label className="font-medium truncate max-w-[200px]">{file.name}</Label>
+                    <Label className="text-[0.625rem] sm:text-sm font-medium truncate max-w-[100px] sm:max-w-[150px]">{file.name}</Label>
                     {!uploading && (
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="h-8 w-8 p-0" 
+                        className="h-5 w-5 sm:h-6 sm:w-6 p-0" 
                         onClick={(e) => {
                           e.stopPropagation();
                           resetFileInput();
                         }}
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-3 w-3 sm:h-4 sm:w-4" />
                         <span className="sr-only">Remove file</span>
                       </Button>
                     )}
                   </div>
                   
                   {file.type === 'application/pdf' && pageCount > 1 && (
-                    <div className="text-sm text-muted-foreground mt-1">
+                    <div className="text-[0.625rem] sm:text-sm text-muted-foreground mt-1">
                       {pageCount} pages detected
                     </div>
                   )}
                   
                   {uploading && (
                     <div className="w-full mt-2">
-                      <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                      <div className="h-1 sm:h-1.5 w-full bg-muted rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-primary transition-all duration-300"
                           style={{ width: `${progress}%` }}
                         />
                       </div>
-                      <p className="text-xs text-muted-foreground text-center mt-1">
+                      <p className="text-[0.5rem] sm:text-xs text-muted-foreground text-center mt-1">
                         Uploading... {progress}%
                       </p>
                     </div>
@@ -279,8 +280,8 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onFileUploaded }) => {
           )}
           
           {uploadError && (
-            <div className="flex items-center gap-2 text-destructive text-sm py-2 px-3 bg-destructive/10 rounded-lg">
-              <AlertTriangle className="h-4 w-4" />
+            <div className="flex items-center gap-1 sm:gap-2 text-destructive text-[0.625rem] sm:text-sm py-1 sm:py-2 px-2 sm:px-3 bg-destructive/10 rounded-lg">
+              <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
               {uploadError}
             </div>
           )}
@@ -291,16 +292,16 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onFileUploaded }) => {
                 type="button" 
                 disabled={!file || uploading} 
                 onClick={handleUpload}
-                className="w-full sm:w-auto"
+                className="w-full h-7 sm:h-8 text-[0.625rem] sm:text-sm"
               >
                 {uploading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                     Uploading...
                   </>
                 ) : (
                   <>
-                    <Upload className="mr-2 h-4 w-4" />
+                    <Upload className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                     Upload Document
                   </>
                 )}
@@ -310,9 +311,9 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onFileUploaded }) => {
                 type="button" 
                 variant="outline" 
                 onClick={resetFileInput}
-                className="w-full sm:w-auto"
+                className="w-full h-7 sm:h-8 text-[0.625rem] sm:text-sm"
               >
-                <X className="mr-2 h-4 w-4" />
+                <X className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                 Replace Document
               </Button>
             )}
