@@ -252,11 +252,11 @@ const PricingManager: React.FC<PricingManagerProps> = ({ shopId }) => {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center">
-                        <span className="mr-2">$</span>
+                        <span className="mr-2">₹</span>
                         <Input
                           type="number"
-                          min="0.01"
-                          step="0.01"
+                          min="0"
+                          step="1"
                           value={item.price_per_page.toString()}
                           onChange={(e) => handlePricingChange(index, 'price_per_page', e.target.value)}
                           className="w-full"

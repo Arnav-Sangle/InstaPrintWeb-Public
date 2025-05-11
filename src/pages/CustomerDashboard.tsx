@@ -3,14 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import UserRedirect from '@/components/UserRedirect';
 import Navbar from '@/components/Navbar';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileUp, Map, Clock, FileText, Printer, ShoppingBag } from 'lucide-react';
+import { FileUp, FileText, ShoppingBag } from 'lucide-react';
 import FileCheck from '@/components/FileCheck';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import ActiveOrders from '@/components/ActiveOrders';
+import OrderHistory from '@/components/OrderHistory';
 
 const CustomerDashboard = () => {
   const { user } = useAuth();
@@ -29,27 +30,27 @@ const CustomerDashboard = () => {
     if (!user) return;
     
     try {
-      // Count active orders (pending, processing)
-      const { count: activeCount, error: activeError } = await supabase
+      // Get active orders (pending)
+      const { data: activeOrders, error: activeError } = await supabase
         .from('print_jobs')
-        .select('*', { count: 'exact', head: true })
+        .select('*')
         .eq('customer_id', user.id)
-        .in('status', ['pending', 'processing']);
+        .eq('status', 'pending');
       
       if (activeError) throw activeError;
       
-      // Count completed orders
-      const { count: completedCount, error: completedError } = await supabase
+      // Get completed orders (completed or cancelled)
+      const { data: completedOrders, error: completedError } = await supabase
         .from('print_jobs')
-        .select('*', { count: 'exact', head: true })
+        .select('*')
         .eq('customer_id', user.id)
-        .eq('status', 'ready');
+        .in('status', ['completed', 'cancelled']);
       
       if (completedError) throw completedError;
       
       setStats({
-        activeOrders: activeCount || 0,
-        completedOrders: completedCount || 0,
+        activeOrders: activeOrders.length,
+        completedOrders: completedOrders.length,
       });
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -116,37 +117,18 @@ const CustomerDashboard = () => {
               </Card>
             </div>
             
-            <Tabs defaultValue="orders" className="w-full animate-on-load">
+            <Tabs defaultValue="active-orders" className="w-full animate-on-load">
               <TabsList className="grid grid-cols-2 max-w-md mb-8">
-                <TabsTrigger value="orders">My Orders</TabsTrigger>
-                <TabsTrigger value="history">History</TabsTrigger>
+                <TabsTrigger value="active-orders">Active Orders</TabsTrigger>
+                <TabsTrigger value="order-history">Order History</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="orders" className="space-y-6">
+              <TabsContent value="active-orders" className="space-y-6">
                 <ActiveOrders />
               </TabsContent>
               
-              <TabsContent value="history">
-                <Card className="bg-card shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Order History</CardTitle>
-                    <CardDescription>
-                      View your past print orders
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="p-5 bg-muted rounded-full mb-5">
-                      <Clock size={48} className="text-muted-foreground" />
-                    </div>
-                    <h3 className="text-lg font-medium">Order History</h3>
-                    <p className="text-sm text-muted-foreground max-w-md mt-2">
-                      View details of your completed print orders
-                    </p>
-                    <Button className="mt-6" variant="outline" asChild>
-                      <Link to="/print-order">View History</Link>
-                    </Button>
-                  </CardContent>
-                </Card>
+              <TabsContent value="order-history">
+                <OrderHistory />
               </TabsContent>
             </Tabs>
           </div>

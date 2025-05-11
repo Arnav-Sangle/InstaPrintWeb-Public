@@ -1,6 +1,9 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+const supaCallTimeout = 0
 
 // Define user roles
 export type UserRole = 'customer' | 'shopkeeper' | 'admin';
@@ -63,19 +66,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout function
   const logout = async () => {
     try {
-      // Clean up any ongoing print order process
-      const printOrderState = localStorage.getItem('print-order-state');
-      if (printOrderState) {
-        const { path } = JSON.parse(printOrderState);
-        if (path) {
-          await supabase.storage
-            .from('print-documents')
-            .remove([path]);
-        }
-      }
-
+      // Clear user state first
+      setUser(null);
+      
       // Clear Supabase session
-      await supabase.auth.signOut({ scope: 'global' });
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       
       // Clear local storage and session storage
       localStorage.clear();
@@ -87,41 +83,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .replace(/^ +/, "")
           .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
       });
-      
-      // Clear user state
-      setUser(null);
-      setLoading(false);
-      
-      // Force reload to ensure clean state
-      window.location.href = '/';
+
+      // Navigate to auth page
+      window.location.href = '/auth';
     } catch (error: any) {
       console.error('Logout failed:', error);
-      // Even if there's an error, try to clear everything
+      // Even if there's an error, ensure we clean up
+      setUser(null);
       localStorage.clear();
       sessionStorage.clear();
-      setUser(null);
-      window.location.href = '/';
+      window.location.href = '/auth';
     }
   };
 
   // Handle tab close and navigation events
   useEffect(() => {
-    let isUnloading = false;
     let isNavigatingBack = false;
-
-    // Handle tab/browser close
-    const handleTabClose = (event: BeforeUnloadEvent) => {
-      isUnloading = true;
-      // Only logout on actual tab/window close
-      supabase.auth.signOut({ scope: 'local' });
-      localStorage.clear();
-      sessionStorage.clear();
-      setUser(null);
-    };
 
     // Handle navigation (back/forward)
     const handleNavigation = (event: PopStateEvent) => {
-      if (!isUnloading && !isNavigatingBack) {
+      if (!isNavigatingBack) {
         isNavigatingBack = true;
         // Let the default back navigation happen naturally
         // without programmatically calling history.go()
@@ -133,57 +114,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    // Handle visibility change (tab switch/close)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        // Do nothing on tab switch, only handle actual close
-        const isClosing = document.visibilityState === 'hidden' && !document.hidden;
-        if (isClosing) {
-          handleTabClose(new Event('beforeunload') as BeforeUnloadEvent);
-        }
-      }
-    };
-
     // Add event listeners
-    window.addEventListener('beforeunload', handleTabClose);
     window.addEventListener('popstate', handleNavigation);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Cleanup listeners on unmount
     return () => {
-      window.removeEventListener('beforeunload', handleTabClose);
       window.removeEventListener('popstate', handleNavigation);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
   // Initialize auth state
   useEffect(() => {
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout;
+
     // Check for existing session
     const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session) {
+        if (session && mounted) {
           const profile = await fetchUserProfile(session.user.id);
-          if (profile) {
+          if (profile && mounted) {
             setUser({
               id: session.user.id,
               email: session.user.email!,
               name: profile.name || '',
               role: profile.role as UserRole,
             });
-          } else {
-            // If profile fetch fails, clear the session
-            await logout();
           }
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
-        // Clear session on error
-        await logout();
       } finally {
-        setLoading(false);
+        if (mounted) {
+          // Use timeout to prevent race conditions
+          timeoutId = setTimeout(() => {
+            if (mounted) {
+              setLoading(false);
+            }
+          }, 0);
+        }
       }
     };
 
@@ -191,24 +162,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        const profile = await fetchUserProfile(session.user.id);
-        if (profile) {
-          setUser({
-            id: session.user.id,
-            email: session.user.email!,
-            name: profile.name || '',
-            role: profile.role as UserRole,
-          });
+      //Wrapping content inside "supabase.auth.onAuthStateChange" in "setTimeout(async() => {})" function fixes the loading, auth and supabase services unresponsive error
+      setTimeout(async() => {
+        
+        if (!mounted) return;
+        
+        if (event === 'SIGNED_IN' && session) {
+          const profile = await fetchUserProfile(session.user.id);
+          if (profile && mounted) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              name: profile.name || '',
+              role: profile.role as UserRole,
+            });
+            timeoutId = setTimeout(() => {
+              if (mounted) {
+                setLoading(false);
+              }
+            }, 0);
+          }
+        } else if (event === 'SIGNED_OUT' && mounted) {
+          setUser(null);
+          timeoutId = setTimeout(() => {
+            if (mounted) {
+              setLoading(false);
+            }
+          }, 0);
         }
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-      }
+        
+      }, supaCallTimeout);
     });
 
-    // Cleanup subscription on unmount
+    // Cleanup subscription, mounted flag, and timeouts on unmount
     return () => {
+      mounted = false;
       subscription.unsubscribe();
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
   }, []);
 

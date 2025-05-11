@@ -20,7 +20,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     try {
       // Check if documents bucket exists
       const { data: buckets } = await supabase.storage.listBuckets();
-      const documentsBucketExists = buckets?.some(bucket => bucket.name === 'documents');
+      const documentsBucketExists = buckets?.some(bucket => bucket.name === "documents");
       
       if (!documentsBucketExists) {
         console.log('Documents bucket does not exist. Please create it in the Supabase dashboard.');

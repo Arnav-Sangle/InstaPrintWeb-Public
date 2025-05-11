@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import UserRedirect from '@/components/UserRedirect';
@@ -6,7 +5,7 @@ import Navbar from '@/components/Navbar';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Printer, Settings, FileText, MapPin, Store, Clock, BarChart, Tag } from 'lucide-react';
+import { Plus, Printer, Settings, FileText, MapPin, Store, Clock, BarChart, Tag, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import ShopLocationForm from '@/components/ShopLocationForm';
@@ -20,6 +19,7 @@ const ShopkeeperDashboard = () => {
   const [showNewShopForm, setShowNewShopForm] = useState(false);
   const [editingShopId, setEditingShopId] = useState<string | null>(null);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+  const [completedOrdersCount, setCompletedOrdersCount] = useState(0);
   const [totalSales, setTotalSales] = useState(0);
   
   // Fetch shops owned by the current user
@@ -69,6 +69,17 @@ const ShopkeeperDashboard = () => {
         
       if (!pendingError) {
         setPendingOrdersCount(pendingOrders?.length || 0);
+      }
+
+      // Fetch completed orders count
+      const { data: completedOrders, error: completedError } = await supabase
+        .from('print_jobs')
+        .select('id', { count: 'exact' })
+        .in('shop_id', shopIds)
+        .eq('status', 'completed');
+        
+      if (!completedError) {
+        setCompletedOrdersCount(completedOrders?.length || 0);
       }
       
       // Fetch total sales
@@ -157,24 +168,7 @@ const ShopkeeperDashboard = () => {
             
             {/* Dashboard stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-on-load">
-              <Card className="bg-card shadow-sm card-hover">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Your Shops</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center">
-                    <div className="mr-4 p-2 bg-primary/10 rounded-full">
-                      <Store className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">{shops.length}</div>
-                      <p className="text-xs text-muted-foreground">Registered print shops</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="bg-card shadow-sm card-hover">
+            <Card className="bg-card shadow-sm card-hover">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Pending Orders</CardTitle>
                 </CardHeader>
@@ -186,6 +180,23 @@ const ShopkeeperDashboard = () => {
                     <div>
                       <div className="text-2xl font-bold">{pendingOrdersCount}</div>
                       <p className="text-xs text-muted-foreground">Awaiting processing</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-card shadow-sm card-hover">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Completed Orders</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <div className="mr-4 p-2 bg-primary/10 rounded-full">
+                      <CheckCircle className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{completedOrdersCount}</div>
+                      <p className="text-xs text-muted-foreground">Marked Completed</p>
                     </div>
                   </div>
                 </CardContent>
@@ -242,77 +253,88 @@ const ShopkeeperDashboard = () => {
               </Card>
             ) : (
               <Tabs defaultValue="shops" className="w-full animate-on-load">
-                <TabsList className="grid grid-cols-4 max-w-md mb-8">
-                  <TabsTrigger value="shops">My Shops</TabsTrigger>
+                <TabsList className="grid grid-cols-3 max-w-md mb-8">
+                  <TabsTrigger value="shops">My Shop</TabsTrigger>
                   <TabsTrigger value="orders">Print Orders</TabsTrigger>
                   <TabsTrigger value="pricing">Pricing</TabsTrigger>
-                  <TabsTrigger value="settings">Settings</TabsTrigger>
+                  {/* <TabsTrigger value="settings">Settings</TabsTrigger> */}
                 </TabsList>
                 
                 <TabsContent value="shops" className="space-y-6">
-                  {loading ? (
+                  <Card className="bg-card shadow-sm"> 
+                    <CardHeader>
+                        <CardTitle>My Shop</CardTitle>
+                        <CardDescription>
+                          Manage your shop location settings
+                        </CardDescription>
+                      </CardHeader>
+
+                    {loading ? (
                     <div className="flex items-center justify-center py-10">
                       <div className="rounded-md h-8 w-8 border-4 border-t-primary border-r-transparent border-l-transparent border-b-transparent animate-spin"></div>
                     </div>
-                  ) : shops.length > 0 ? (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                      {shops.map((shop) => (
-                        <Card key={shop.id} className="bg-card shadow-sm overflow-hidden hover:shadow-md transition-shadow card-hover">
-                          <CardHeader className="pb-3">
-                            <CardTitle>{shop.name}</CardTitle>
-                            <CardDescription className="flex items-center gap-1">
-                              <MapPin size={14} />
-                              {shop.address}
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <p className="line-clamp-2 text-sm text-muted-foreground">
-                              {shop.description || 'No description provided.'}
-                            </p>
-                            {shop.latitude && shop.longitude ? (
-                              <div className="mt-3 flex items-center text-xs text-green-600">
-                                <MapPin size={12} className="mr-1" />
-                                Location set: {shop.latitude.toFixed(4)}, {shop.longitude.toFixed(4)}
-                              </div>
-                            ) : (
-                              <div className="mt-3 flex items-center text-xs text-amber-600">
-                                <MapPin size={12} className="mr-1" />
-                                No location set
-                              </div>
-                            )}
-                          </CardContent>
-                          <CardFooter className="border-t px-6 py-4 bg-muted/50 flex justify-between">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => setEditingShopId(shop.id)}
-                            >
-                              {shop.latitude && shop.longitude ? 'Update Location' : 'Set Location'}
-                            </Button>
-                            <Button variant="outline" size="sm">View Details</Button>
-                          </CardFooter>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : (
-                    <Card className="bg-card shadow-sm">
-                      <CardHeader>
-                        <CardTitle>No shops registered</CardTitle>
-                        <CardDescription>
-                          Register your first print shop to start accepting orders
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="flex flex-col items-center py-8">
-                        <div className="p-5 bg-muted rounded-full mb-5">
-                          <Printer size={48} className="text-muted-foreground" />
+                    ) : shops.length > 0 ? (
+                      <div className="space-y-6 px-6 pb-6">
+                      {/* <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"> */}
+                        <div className="space-y-4">
+                          {shops.map((shop) => (
+                            <Card key={shop.id} className="bg-card shadow-sm overflow-hidden hover:shadow-md transition-shadow card-hover">
+                              <CardHeader className="pb-3">
+                                <CardTitle>{shop.name}</CardTitle>
+                                <CardDescription className="flex items-center gap-1">
+                                  <MapPin size={14} />
+                                  {shop.address}
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                <p className="line-clamp-2 text-sm text-muted-foreground">
+                                  {shop.description || 'No description provided.'}
+                                </p>
+                                {shop.latitude && shop.longitude ? (
+                                  <div className="mt-3 flex items-center text-xs text-green-600">
+                                    <MapPin size={12} className="mr-1" />
+                                    Location set: {shop.latitude.toFixed(4)}, {shop.longitude.toFixed(4)}
+                                  </div>
+                                ) : (
+                                  <div className="mt-3 flex items-center text-xs text-amber-600">
+                                    <MapPin size={12} className="mr-1" />
+                                    No location set
+                                  </div>
+                                )}
+                              </CardContent>
+                              <CardFooter className="border-t px-6 py-4 bg-muted/50 flex justify-center">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => setEditingShopId(shop.id)}
+                                >
+                                  {shop.latitude && shop.longitude ? 'Update Location' : 'Set Location'}
+                                </Button>
+                              </CardFooter>
+                            </Card>
+                          ))}
                         </div>
-                        <Button className="flex items-center gap-2" onClick={() => setShowNewShopForm(true)}>
-                          <Plus size={16} />
-                          Register New Shop
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  )}
+                      </div>
+                    ) : (
+                      <Card className="bg-card shadow-sm">
+                        <CardHeader>
+                          <CardTitle>No shops registered</CardTitle>
+                          <CardDescription>
+                            Register your first print shop to start accepting orders
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col items-center py-8">
+                          <div className="p-5 bg-muted rounded-full mb-5">
+                            <Printer size={48} className="text-muted-foreground" />
+                          </div>
+                          <Button className="flex items-center gap-2" onClick={() => setShowNewShopForm(true)}>
+                            <Plus size={16} />
+                            Register New Shop
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </Card>
                 </TabsContent>
                 
                 <TabsContent value="orders">
@@ -323,7 +345,7 @@ const ShopkeeperDashboard = () => {
                   <ShopPricingTab />
                 </TabsContent>
                 
-                <TabsContent value="settings">
+                {/* <TabsContent value="settings">
                   <Card className="bg-card shadow-sm">
                     <CardHeader>
                       <CardTitle>Shop Settings</CardTitle>
@@ -387,7 +409,7 @@ const ShopkeeperDashboard = () => {
                       )}
                     </CardContent>
                   </Card>
-                </TabsContent>
+                </TabsContent> */}
               </Tabs>
             )}
           </div>

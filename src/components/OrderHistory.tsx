@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { CalendarDays, FileText, Clock, Printer, AlertTriangle, CheckCircle, Eye, LucideIndianRupee } from 'lucide-react';
+import { FileText, Clock, AlertTriangle, CheckCircle, Eye, LucideIndianRupee } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,9 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
-import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { SupabaseAuthClient } from '@supabase/supabase-js/dist/module/lib/SupabaseAuthClient';
 
 const supaCallTimeout = 0
 
@@ -31,11 +28,6 @@ type PrintJob = {
 };
 
 const statusStyles = {
-  pending: {
-    bgColor: 'bg-yellow-100',
-    textColor: 'text-yellow-800',
-    icon: Clock,
-  },
   completed: {
     bgColor: 'bg-green-100',
     textColor: 'text-green-800',
@@ -48,7 +40,7 @@ const statusStyles = {
   },
 };
 
-const ActiveOrders = () => {
+const OrderHistory = () => {
   const { user } = useAuth();
   const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,8 +51,7 @@ const ActiveOrders = () => {
 
   const fetchPrintJobs = async (force: boolean = false) => {
     if (!user) return;
-    
-   
+
     // Only fetch if forced or if it's been more than 5 seconds since last fetch
     const now = Date.now();
     if (!force && now - lastFetchTime < 5000) {
@@ -69,63 +60,49 @@ const ActiveOrders = () => {
 
     try {
       setLoading(true);
-
       setTimeout(async () => {
         const { data: jobsData, error: jobsError } = await supabase
-          .from('print_jobs')
-          .select('*')
-          .eq('customer_id', user.id)
-          .eq('status', 'pending')
-          .order('created_at', { ascending: false });
+            .from('print_jobs')
+            .select('*')
+            .eq('customer_id', user.id)
+            .in('status', ['completed', 'cancelled'])
+            .order('created_at', { ascending: false });
 
         if (jobsError) {
-          console.error('Error fetching jobs:', jobsError);
-          setError('Failed to load your orders');
-          return;
+            console.error('Error fetching jobs:', jobsError);
+            setError('Failed to load your orders');
+            return;
         }
 
         const shopIds = [...new Set(jobsData.map(job => job.shop_id))];
-        console.log(shopIds)
-        console.log("gettting shop ids")
-        console.log(supabase.auth.getUser())
-        console.log(supabase.auth.getSession())
-
-
-      // setTimeout(async () => {
         const { data: shopsData, error: shopsError } = await supabase
-          .from('shops')
-          .select('id, name')
-          .in('id', shopIds);
-        console.log("fetched shop ids")
+            .from('shops')
+            .select('id, name')
+            .in('id', shopIds);
 
         if (shopsError) {
-          console.error('Error fetching shops:', shopsError);
-          setError('Failed to load shop details');
-          return;
+            console.error('Error fetching shops:', shopsError);
+            setError('Failed to load shop details');
+            return;
         }
 
         const jobsWithShopNames = jobsData.map(job => ({
-          ...job,
-          shop_name: shopsData?.find(s => s.id === job.shop_id)?.name || 'Unknown Shop',
+            ...job,
+            shop_name: shopsData?.find(s => s.id === job.shop_id)?.name || 'Unknown Shop',
         }));
 
         setPrintJobs(jobsWithShopNames);
         setError(null);
         setLastFetchTime(now);
-      // }, 0)  
-
-        console.log("got shop ids")
-      }, supaCallTimeout)
+      }, supaCallTimeout) 
 
     } catch (error: any) {
+      console.error('Error fetching print jobs:', error);
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);
     }
   };
-
-
-
 
   useEffect(() => {
     let mounted = true;
@@ -134,13 +111,12 @@ const ActiveOrders = () => {
     let retryCount = 0;
     const MAX_RETRIES = 3;
 
-    console.log("inside useEffect")
-    
     const loadJobs = async (force: boolean = false) => {
       if (!mounted) return;
-
+      
       try {
         await fetchPrintJobs(force);
+
       } catch (error) {
         console.error('Error in loadJobs:', error);
         if (retryCount < MAX_RETRIES) {
@@ -148,7 +124,6 @@ const ActiveOrders = () => {
           retryTimeout = setTimeout(() => loadJobs(true), 1000 * retryCount);
         }
       }
-
     };
 
     const setupSubscription = () => {
@@ -178,7 +153,6 @@ const ActiveOrders = () => {
 
     // Handle visibility change
     const handleVisibilityChange = () => {
-      console.log("inside handleVisibilityChange")
       if (document.visibilityState === 'visible' && mounted) {
         retryCount = 0;
         loadJobs(true); // Force refresh when tab becomes visible
@@ -186,17 +160,6 @@ const ActiveOrders = () => {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-  
-    // supabase.auth.onAuthStateChange(async (_, session) => {
-    //   setTimeout(async () => {
-    //     console.log("inside auth state change")
-    //     // await on other Supabase function here
-    //     // this runs right after the callback has finished
-    //     handleVisibilityChange(); // Force refresh when tab becomes visible
-    //   }, 0) 
-    // })
-   
-  
 
     return () => {
       mounted = false;
@@ -209,34 +172,6 @@ const ActiveOrders = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user]);
-
-
- 
-
-
-  const cancelOrder = async (jobId: string) => {
-    try {
-
-      setTimeout(async () => {
-        const { error } = await supabase
-          .from('print_jobs')
-          .update({ status: 'cancelled' })
-          .eq('id', jobId)
-          .eq('customer_id', user?.id);
-
-        if (error) throw error;
-
-        // After cancellation, remove it from the displayed list
-        setPrintJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
-
-        toast.success('Order cancelled successfully');
-      }, supaCallTimeout) 
-
-    } catch (error: any) {
-      console.error('Error cancelling order:', error);
-      toast.error(error.message || 'Failed to cancel order');
-    }
-  };
 
   const viewDocument = async (filePath: string) => {
     try {
@@ -258,16 +193,16 @@ const ActiveOrders = () => {
     return (
       <Card className="bg-card shadow-sm">
         <CardHeader>
-          <CardTitle>My Active Orders</CardTitle>
+          <CardTitle>Order History</CardTitle>
           <CardDescription>
-            Track and manage your current print jobs
+            View your completed and cancelled orders
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center py-8">
           <div className="p-4 bg-primary/10 rounded-full mb-4">
             <div className="h-6 w-6 border-2 border-t-primary border-r-transparent border-l-transparent border-b-transparent animate-spin"></div>
           </div>
-          <p className="text-sm text-muted-foreground">Loading your orders...</p>
+          <p className="text-sm text-muted-foreground">Loading your order history...</p>
         </CardContent>
       </Card>
     );
@@ -277,9 +212,9 @@ const ActiveOrders = () => {
     return (
       <Card className="bg-card shadow-sm">
         <CardHeader>
-          <CardTitle>My Active Orders</CardTitle>
+          <CardTitle>Order History</CardTitle>
           <CardDescription>
-            Track and manage your current print jobs
+            View your completed and cancelled orders
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center py-8">
@@ -309,22 +244,19 @@ const ActiveOrders = () => {
     return (
       <Card className="bg-card shadow-sm">
         <CardHeader>
-          <CardTitle>My Active Orders</CardTitle>
+          <CardTitle>Order History</CardTitle>
           <CardDescription>
-            Track and manage your current print jobs
+            View your completed and cancelled orders
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center py-8">
           <div className="p-5 bg-muted rounded-full mb-5">
             <FileText size={48} className="text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-medium">No active orders</h3>
+          <h3 className="text-lg font-medium">No order history</h3>
           <p className="text-sm text-muted-foreground max-w-md mt-2 text-center">
-            You don't have any active print orders. Create a new print job to get started.
+            You don't have any completed or cancelled orders yet.
           </p>
-          <Button className="mt-6" asChild>
-            <Link to="/print-order">New Print Job</Link>
-          </Button>
         </CardContent>
       </Card>
     );
@@ -334,9 +266,9 @@ const ActiveOrders = () => {
     <>
       <Card className="bg-card shadow-sm">
         <CardHeader>
-          <CardTitle>My Active Orders</CardTitle>
+          <CardTitle>Order History</CardTitle>
           <CardDescription>
-            Track and manage your current print jobs
+            View your completed and cancelled orders
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -391,7 +323,7 @@ const ActiveOrders = () => {
                     </div>
                   </div>
                   
-                  <div className="pt-2 flex justify-between">
+                  <div className="pt-2">
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -400,17 +332,6 @@ const ActiveOrders = () => {
                       <Eye className="mr-2 h-4 w-4" />
                       View Document
                     </Button>
-                    
-                    {job.status === 'pending' && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => cancelOrder(job.id)}
-                      >
-                        Cancel Order
-                      </Button>
-                    )}
                   </div>
                 </div>
               );
@@ -439,4 +360,4 @@ const ActiveOrders = () => {
   );
 };
 
-export default ActiveOrders;
+export default OrderHistory; 
